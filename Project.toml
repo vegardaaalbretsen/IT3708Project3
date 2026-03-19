@@ -1,0 +1,9 @@
+name = "IT3708Project3"
+uuid = "9fef2166-3cc6-4cf1-9cbc-63b160ee5726"
+authors = ["vegardaaalbretsen"]
+version = "0.1.0"
+
+[deps]
+
+[compat]
+julia = "1"
