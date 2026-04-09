@@ -4,6 +4,9 @@ using HDF5
 using Statistics
 
 export DATASET_SPECS,
+       bitflip_neighbors,
+       padded_bitstring,
+       hinged_bitstring_coordinates,
        subset_to_bitvector,
        active_columns,
        feature_penalty,
@@ -14,7 +17,70 @@ export DATASET_SPECS,
        best_raw_subset,
        best_penalized_subset,
        triangle_fitness,
-       triangle_landscape
+       triangle_landscape,
+       local_optima_network,
+       triangle_local_optima_network,
+       feature_selection_local_optima_network
+
+const FITNESS_TOL = 1e-12
+
+"""
+    padded_bitstring(index, n_features)
+
+Return the bitstring for `index` as a length-`n_features` vector with the most
+significant bit first.
+"""
+function padded_bitstring(index::Integer, n_features::Integer)
+    index >= 0 || throw(ArgumentError("subset index must be non-negative"))
+    n_features > 0 || throw(ArgumentError("n_features must be positive"))
+    index < (1 << n_features) || throw(ArgumentError("subset index $index exceeds $n_features features"))
+
+    bits = Vector{Int}(undef, n_features)
+    for position in 1:n_features
+        shift = n_features - position
+        bits[position] = (index >> shift) & 1
+    end
+    return bits
+end
+
+function decimal_bits(bits::AbstractVector{<:Integer})
+    value = 0
+    for bit in bits
+        value = (value << 1) | Int(bit)
+    end
+    return value
+end
+
+"""
+    hinged_bitstring_coordinates(index, n_features)
+
+Map one bitstring to its hinged bitstring map coordinates by splitting the
+bitstring into two halves and converting each half to decimal.
+
+For odd `n_features`, the first half receives the extra bit.
+"""
+function hinged_bitstring_coordinates(index::Integer, n_features::Integer)
+    bits = padded_bitstring(index, n_features)
+    split = cld(n_features, 2)
+    xbits = bits[1:split]
+    ybits = bits[(split + 1):end]
+
+    x = decimal_bits(xbits)
+    y = isempty(ybits) ? 0 : decimal_bits(ybits)
+    return x, y
+end
+
+"""
+    bitflip_neighbors(index, n_features)
+
+Return all Hamming-1 neighbors of `index` for a bitstring of length `n_features`.
+"""
+function bitflip_neighbors(index::Integer, n_features::Integer)
+    index >= 0 || throw(ArgumentError("subset index must be non-negative"))
+    n_features > 0 || throw(ArgumentError("n_features must be positive"))
+
+    return [xor(index, 1 << (bit - 1)) for bit in 1:n_features]
+end
 
 const DATASET_SPECS = Dict(
     "breast-w" => (path = joinpath("train data", "01-breast-w_lr_F.h5"), n_features = 9),
@@ -210,6 +276,151 @@ function triangle_landscape(n::Integer = 16, m::Integer = 1, s::Integer = 4; inc
         m = m,
         s = s,
     )
+end
+
+function best_improving_neighbor(index::Int, fitness_map::Dict{Int, Float64}, n_features::Int)
+    current_fitness = fitness_map[index]
+    best_neighbor = index
+    best_fitness = current_fitness
+
+    for neighbor in bitflip_neighbors(index, n_features)
+        haskey(fitness_map, neighbor) || continue
+        neighbor_fitness = fitness_map[neighbor]
+
+        if neighbor_fitness > current_fitness + FITNESS_TOL
+            if best_neighbor == index || neighbor_fitness > best_fitness + FITNESS_TOL ||
+               (abs(neighbor_fitness - best_fitness) <= FITNESS_TOL && neighbor < best_neighbor)
+                best_neighbor = neighbor
+                best_fitness = neighbor_fitness
+            end
+        end
+    end
+
+    return best_neighbor
+end
+
+function hill_climb_to_optimum(index::Int, fitness_map::Dict{Int, Float64}, n_features::Int, cache::Dict{Int, Int})
+    path = Int[]
+    current = index
+
+    while true
+        if haskey(cache, current)
+            optimum = cache[current]
+            for state in path
+                cache[state] = optimum
+            end
+            return optimum
+        end
+
+        push!(path, current)
+        next = best_improving_neighbor(current, fitness_map, n_features)
+        if next == current
+            for state in path
+                cache[state] = current
+            end
+            return current
+        end
+
+        current = next
+    end
+end
+
+"""
+    local_optima_network(subset_indices, fitness_values, n_features)
+
+Build a directed, weighted local optima network for a bitstring landscape.
+Each state is hill-climbed by deterministic best-improvement to its local optimum.
+Nodes are local optima, node sizes are basin sizes, and edge weights count Hamming-1
+crossings between basins.
+"""
+function local_optima_network(subset_indices::AbstractVector{<:Integer}, fitness_values::AbstractVector{<:Real}, n_features::Integer)
+    n_features > 0 || throw(ArgumentError("n_features must be positive"))
+    length(subset_indices) == length(fitness_values) || throw(ArgumentError("subset_indices and fitness_values must have the same length"))
+
+    fitness_map = Dict(Int(subset_index) => Float64(fitness) for (subset_index, fitness) in zip(subset_indices, fitness_values))
+    cache = Dict{Int, Int}()
+    optimum_of_state = Dict{Int, Int}()
+
+    for subset_index in subset_indices
+        optimum_of_state[Int(subset_index)] = hill_climb_to_optimum(Int(subset_index), fitness_map, Int(n_features), cache)
+    end
+
+    node_subset_indices = sort(unique(values(optimum_of_state)))
+    node_position = Dict(node => position for (position, node) in enumerate(node_subset_indices))
+    basin_sizes = zeros(Int, length(node_subset_indices))
+
+    for optimum in values(optimum_of_state)
+        basin_sizes[node_position[optimum]] += 1
+    end
+
+    edge_counts = Dict{Tuple{Int, Int}, Int}()
+    outgoing_counts = zeros(Int, length(node_subset_indices))
+
+    for subset_index in subset_indices
+        source_optimum = optimum_of_state[Int(subset_index)]
+        source_node = node_position[source_optimum]
+
+        for neighbor in bitflip_neighbors(Int(subset_index), Int(n_features))
+            haskey(fitness_map, neighbor) || continue
+
+            target_optimum = optimum_of_state[neighbor]
+            if target_optimum != source_optimum
+                target_node = node_position[target_optimum]
+                edge_counts[(source_node, target_node)] = get(edge_counts, (source_node, target_node), 0) + 1
+                outgoing_counts[source_node] += 1
+            end
+        end
+    end
+
+    edges = sort([
+        (
+            source = source,
+            target = target,
+            count = count,
+            probability = outgoing_counts[source] == 0 ? 0.0 : count / outgoing_counts[source],
+        ) for ((source, target), count) in edge_counts
+    ], by = edge -> (-edge.count, edge.source, edge.target))
+
+    return (
+        subset_indices = Int.(subset_indices),
+        fitness_values = Float64.(fitness_values),
+        optimum_of_state = optimum_of_state,
+        node_subset_indices = node_subset_indices,
+        node_fitness = [fitness_map[node] for node in node_subset_indices],
+        node_active_counts = [count_ones(node) for node in node_subset_indices],
+        basin_sizes = basin_sizes,
+        edges = edges,
+        n_features = Int(n_features),
+    )
+end
+
+"""
+    triangle_local_optima_network(n = 16, m = 1, s = 4; include_zero = true)
+
+Build a local optima network for the synthetic triangle landscape.
+"""
+function triangle_local_optima_network(n::Integer = 16, m::Integer = 1, s::Integer = 4; include_zero::Bool = true)
+    landscape = triangle_landscape(n, m, s; include_zero = include_zero)
+    return local_optima_network(landscape.subset_indices, landscape.fitness, landscape.n_features)
+end
+
+"""
+    feature_selection_local_optima_network(path, n_features; epsilon = 1/8, score = :penalized)
+
+Build a local optima network for one of the feature-selection landscapes.
+`score` may be `:raw` or `:penalized`.
+"""
+function feature_selection_local_optima_network(path::AbstractString, n_features::Integer; epsilon::Real = 1 / 8, score::Symbol = :penalized)
+    landscape = read_feature_selection_landscape(path, n_features; epsilon = epsilon)
+    fitness_values = if score == :raw
+        landscape.raw_accuracy_table
+    elseif score == :penalized
+        landscape.penalized_table
+    else
+        throw(ArgumentError("score must be :raw or :penalized"))
+    end
+
+    return local_optima_network(landscape.subset_indices, fitness_values, n_features)
 end
 
 end # module IT3708Project3

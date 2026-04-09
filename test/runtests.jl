@@ -2,6 +2,10 @@ using IT3708Project3
 using Test
 
 @testset "Feature decoding" begin
+    @test sort(IT3708Project3.bitflip_neighbors(0, 3)) == [1, 2, 4]
+    @test IT3708Project3.padded_bitstring(13, 4) == [1, 1, 0, 1]
+    @test IT3708Project3.hinged_bitstring_coordinates(62, 6) == (7, 6)
+    @test IT3708Project3.hinged_bitstring_coordinates(13, 5) == (3, 1)
     @test IT3708Project3.subset_to_bitvector(13, 4) == Bool[1, 0, 1, 1]
     @test IT3708Project3.active_columns(13, 4) == [1, 3, 4]
     @test IT3708Project3.feature_penalty(13; epsilon = 1 / 8) == 3 / 8
@@ -38,4 +42,21 @@ end
 
     nozero = IT3708Project3.triangle_landscape(; include_zero = false)
     @test length(nozero.subset_indices) == (1 << 16) - 1
+end
+
+@testset "Local Optima Network" begin
+    toy_lon = IT3708Project3.local_optima_network(collect(0:3), [0.0, 2.0, 2.0, 1.0], 2)
+
+    @test toy_lon.node_subset_indices == [1, 2]
+    @test toy_lon.basin_sizes == [3, 1]
+    @test toy_lon.node_active_counts == [1, 1]
+    @test toy_lon.edges == [
+        (source = 1, target = 2, count = 2, probability = 1.0),
+        (source = 2, target = 1, count = 2, probability = 1.0),
+    ]
+
+    triangle_lon = IT3708Project3.triangle_local_optima_network(4, 1, 4)
+    @test triangle_lon.node_subset_indices == [15]
+    @test triangle_lon.basin_sizes == [16]
+    @test isempty(triangle_lon.edges)
 end
