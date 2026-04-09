@@ -3,6 +3,8 @@ using Test
 
 @testset "Feature decoding" begin
     @test IT3708Project3.subset_to_bitvector(13, 4) == Bool[1, 0, 1, 1]
+    @test IT3708Project3.subset_to_bitstring(13, 4) == "1011"
+    @test IT3708Project3.subset_to_bitstring(13, 4; feature1_first = false) == "1101"
     @test IT3708Project3.active_columns(13, 4) == [1, 3, 4]
     @test IT3708Project3.feature_penalty(13; epsilon = 1 / 8) == 3 / 8
 end
@@ -22,6 +24,22 @@ end
     @test best_raw.raw_accuracy == maximum(landscape.raw_accuracy_table)
     @test best_penalized.penalized_fitness == maximum(landscape.penalized_table)
     @test best_penalized.n_active == length(best_penalized.active_columns)
+
+    rows = IT3708Project3.feature_selection_rows(landscape)
+    @test length(rows) == 511
+    @test rows[1].index == 1
+    @test rows[1].bitstring == "100000000"
+    @test rows[1].num_active_features == 1
+    @test rows[1].active_features == "1"
+    @test rows[1].mean_accuracy ≈ landscape.raw_accuracy_table[1] atol = 1e-12
+    @test rows[1].mean_time ≈ landscape.raw_time_table[1] atol = 1e-12
+
+    output_csv = tempname() * ".csv"
+    IT3708Project3.write_feature_selection_csv(landscape, output_csv)
+    lines = readlines(output_csv)
+    @test lines[1] == "index,bitstring,num_active_features,active_features,mean_accuracy,mean_time"
+    @test startswith(lines[2], "1,100000000,1,1,")
+    @test length(lines) == 512
 end
 
 @testset "Triangle landscape" begin

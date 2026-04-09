@@ -5,11 +5,14 @@ using Statistics
 
 export DATASET_SPECS,
        subset_to_bitvector,
+       subset_to_bitstring,
        active_columns,
        feature_penalty,
        mean_accuracy_landscape,
        mean_time_landscape,
        read_feature_selection_landscape,
+       feature_selection_rows,
+       write_feature_selection_csv,
        summarize_subset,
        best_raw_subset,
        best_penalized_subset,
@@ -38,6 +41,18 @@ function subset_to_bitvector(index::Integer, n_features::Integer)
         bits[feature] = ((index >> (feature - 1)) & 1) == 1
     end
     return bits
+end
+
+"""
+    subset_to_bitstring(index, n_features; feature1_first = true)
+
+Encode a subset index as a bitstring. By default, the first character
+corresponds to feature 1, which matches `subset_to_bitvector`.
+"""
+function subset_to_bitstring(index::Integer, n_features::Integer; feature1_first::Bool = true)
+    bits = subset_to_bitvector(index, n_features)
+    ordered_bits = feature1_first ? bits : reverse(bits)
+    return join(bit ? '1' : '0' for bit in ordered_bits)
 end
 
 """
@@ -126,6 +141,71 @@ function read_feature_selection_landscape(path::AbstractString, n_features::Inte
         n_features = n_features,
         epsilon = Float64(epsilon),
     )
+end
+
+"""
+    feature_selection_rows(landscape)
+
+Build a table-like vector of named tuples for CSV export.
+"""
+function feature_selection_rows(landscape)
+    rows = NamedTuple[]
+
+    for (position, subset_index) in enumerate(landscape.subset_indices)
+        columns = active_columns(subset_index, landscape.n_features)
+        push!(rows, (
+            index = subset_index,
+            bitstring = subset_to_bitstring(subset_index, landscape.n_features),
+            num_active_features = length(columns),
+            active_features = join(columns, ';'),
+            mean_accuracy = landscape.raw_accuracy_table[position],
+            mean_time = landscape.raw_time_table[position],
+        ))
+    end
+
+    return rows
+end
+
+function csv_escape(value)
+    text = string(value)
+    if any(ch -> ch in (',', '"', '\n', '\r'), text)
+        return "\"" * replace(text, "\"" => "\"\"") * "\""
+    end
+    return text
+end
+
+"""
+    write_feature_selection_csv(landscape, output_path)
+
+Write one CSV row per subset with the raw mean accuracy and mean time values.
+"""
+function write_feature_selection_csv(landscape, output_path::AbstractString)
+    rows = feature_selection_rows(landscape)
+    header = (
+        "index",
+        "bitstring",
+        "num_active_features",
+        "active_features",
+        "mean_accuracy",
+        "mean_time",
+    )
+
+    open(output_path, "w") do io
+        println(io, join(header, ','))
+        for row in rows
+            values = (
+                row.index,
+                row.bitstring,
+                row.num_active_features,
+                row.active_features,
+                row.mean_accuracy,
+                row.mean_time,
+            )
+            println(io, join((csv_escape(value) for value in values), ','))
+        end
+    end
+
+    return output_path
 end
 
 """
