@@ -27,5 +27,5 @@ Manifest*.toml
 LocalPreferences.toml
 JuliaLocalPreferences.toml
 
-train data*
+plots/
 .DS_Store
