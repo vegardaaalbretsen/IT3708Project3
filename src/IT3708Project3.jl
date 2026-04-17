@@ -12,6 +12,7 @@ export DATASETS,
        Landscape,
        default_output_path,
        default_hbm_plot_path,
+       default_feature_count_plot_path,
        parse_dataset,
        write_csv,
        load_landscape,
@@ -29,6 +30,9 @@ export DATASETS,
        global_optima,
        hbm_plot_data,
        plot_hbm,
-       save_hbm_plot
+       save_hbm_plot,
+       feature_count_plot_data,
+       plot_fitness_by_feature_count,
+       save_fitness_by_feature_count_plot
 
 end # module IT3708Project3

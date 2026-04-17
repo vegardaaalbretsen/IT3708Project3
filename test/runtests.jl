@@ -89,7 +89,7 @@ end
     @test filesize(output_png) > 0
 end
 
-@testset "Landscape HBM methods" begin
+@testset "Landscape visualization methods" begin
     landscape = Landscape(
         "tiny",
         3,
@@ -101,9 +101,18 @@ end
     )
 
     nodes = build_hbm(landscape)
+    plot_data = feature_count_plot_data(landscape)
 
     @test length(nodes) == 8
     @test nodes[1] == HBMNode(0, 0.0, 0, 0)
     @test sort(local_optima(landscape)) == [5, 7]
     @test sort(global_optima(landscape)) == [5, 7]
+    @test plot_data.feature_counts == [0, 1, 2, 3]
+    @test plot_data.max_fitness == [0.0, 0.4, 0.7, 0.7]
+
+    output_png = tempname() * ".png"
+    exported_path = save_fitness_by_feature_count_plot(landscape, output_png; title="Feature Count Test")
+    @test exported_path == output_png
+    @test isfile(output_png)
+    @test filesize(output_png) > 0
 end

@@ -1,0 +1,50 @@
+using IT3708Project3
+
+function usage()
+    println("Usage: julia --project=. plot_feature_count.jl <dataset-key|triangle> [epsilon] [output-path]")
+    println("")
+    println("Examples:")
+    println("  julia --project=. plot_feature_count.jl breast-w")
+    println("  julia --project=. plot_feature_count.jl breast-w 0.1")
+    println("  julia --project=. plot_feature_count.jl triangle")
+end
+
+dataset_key = length(ARGS) >= 1 ? ARGS[1] : "breast-w"
+epsilon = length(ARGS) >= 2 ? parse(Float64, ARGS[2]) : nothing
+
+landscape = if dataset_key == "triangle"
+    triangle_landscape()
+else
+    haskey(DATASETS, dataset_key) || error("Unknown dataset key: $dataset_key")
+    dataset = DATASETS[dataset_key]
+    csv_path = default_output_path(dataset_key)
+
+    if !isfile(csv_path)
+        parsed = parse_dataset(dataset.path, dataset.num_features; name=dataset_key)
+        write_csv(parsed, csv_path)
+    end
+
+    load_landscape(csv_path, dataset.num_features; name=dataset_key)
+end
+
+default_name = if isnothing(epsilon)
+    "$(dataset_key)_feature_count"
+else
+    epsilon_tag = replace(string(epsilon), "." => "p")
+    "$(dataset_key)_feature_count_e$(epsilon_tag)"
+end
+
+output_path = length(ARGS) >= 3 ? ARGS[3] : default_feature_count_plot_path(default_name)
+values = isnothing(epsilon) ? fitness_values(landscape) : penalized_fitness_values(landscape, epsilon)
+fitness_label = isnothing(epsilon) ? "Fitness" : "Penalized fitness"
+title = isnothing(epsilon) ? "$(landscape.name) fitness by feature count" : "$(landscape.name) fitness by feature count (epsilon=$(epsilon))"
+
+saved_path = save_fitness_by_feature_count_plot(
+    landscape,
+    output_path;
+    values=values,
+    title=title,
+    fitness_label=fitness_label,
+)
+
+println("Saved feature-count plot for `$(landscape.name)` to `$saved_path`.")
