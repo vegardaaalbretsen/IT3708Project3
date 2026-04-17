@@ -1,14 +1,7 @@
-struct HBMNode
-    index::Int
-    fitness::Float64
-    x::Int
-    y::Int
-end
-
 function one_flip_neighbors(index::Int, n_features::Int)
     neighbors = Int[]
     for i in 1:n_features
-        flipped = (index ⊻ (1 << (i - 1)))
+        flipped = xor(index, 1 << (i - 1))
         if flipped != 0
             push!(neighbors, flipped)
         end
