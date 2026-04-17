@@ -21,6 +21,23 @@ function load_landscape(path::AbstractString, num_features::Integer; name::Abstr
     return Landscape(name, Int(num_features), indices, num_selected, accuracy, time, false)
 end
 
+function load_landscape_key(key::AbstractString)
+    if key == "triangle"
+        return triangle_landscape()
+    end
+
+    haskey(DATASETS, key) || error("Unknown dataset key: $key")
+    dataset = DATASETS[key]
+    csv_path = default_output_path(key)
+
+    if !isfile(csv_path)
+        parsed = parse_dataset(dataset.path, dataset.num_features; name=key)
+        write_csv(parsed, csv_path)
+    end
+
+    return load_landscape(csv_path, dataset.num_features; name=key)
+end
+
 function fitness_values(landscape::Landscape)
     return landscape.accuracy
 end

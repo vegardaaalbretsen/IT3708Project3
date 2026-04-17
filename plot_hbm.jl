@@ -22,21 +22,7 @@ end
 
 output_path = length(ARGS) >= 3 ? ARGS[3] : default_hbm_plot_path(default_name)
 
-landscape = if dataset_key == "triangle"
-    triangle_landscape()
-else
-    haskey(DATASETS, dataset_key) || error("Unknown dataset key: $dataset_key")
-    dataset = DATASETS[dataset_key]
-    csv_path = default_output_path(dataset_key)
-
-    if !isfile(csv_path)
-        parsed = parse_dataset(dataset.path, dataset.num_features; name=dataset_key)
-        write_csv(parsed, csv_path)
-    end
-
-    load_landscape(csv_path, dataset.num_features; name=dataset_key)
-end
-
+landscape = load_landscape_key(dataset_key)
 values = if isnothing(epsilon)
     fitness_values(landscape)
 else

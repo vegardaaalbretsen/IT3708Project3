@@ -12,21 +12,7 @@ end
 dataset_key = length(ARGS) >= 1 ? ARGS[1] : "breast-w"
 epsilon = length(ARGS) >= 2 ? parse(Float64, ARGS[2]) : nothing
 
-landscape = if dataset_key == "triangle"
-    triangle_landscape()
-else
-    haskey(DATASETS, dataset_key) || error("Unknown dataset key: $dataset_key")
-    dataset = DATASETS[dataset_key]
-    csv_path = default_output_path(dataset_key)
-
-    if !isfile(csv_path)
-        parsed = parse_dataset(dataset.path, dataset.num_features; name=dataset_key)
-        write_csv(parsed, csv_path)
-    end
-
-    load_landscape(csv_path, dataset.num_features; name=dataset_key)
-end
-
+landscape = load_landscape_key(dataset_key)
 default_name = if isnothing(epsilon)
     "$(dataset_key)_feature_count"
 else
