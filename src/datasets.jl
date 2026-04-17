@@ -1,6 +1,8 @@
 const PROJECT_ROOT = normpath(joinpath(@__DIR__, ".."))
 const RAW_DATA_DIR = joinpath(PROJECT_ROOT, "data", "raw")
 const CSV_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "csv")
+const PLOT_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "plots")
+const HBM_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "hbm")
 
 const DATASETS = Dict(
     "breast-w" => (
@@ -19,4 +21,8 @@ const DATASETS = Dict(
 
 function default_output_path(dataset_key::AbstractString)
     return joinpath(CSV_EXPORT_DIR, "$(dataset_key)_metrics.csv")
+end
+
+function default_hbm_plot_path(name::AbstractString)
+    return joinpath(HBM_PLOT_EXPORT_DIR, "$(name)_hbm.png")
 end
