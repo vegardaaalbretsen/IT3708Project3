@@ -1,16 +1,53 @@
 # IT3708Project3
 
-Minimal project for parsing feature-selection HDF5 data and exporting CSV metrics.
+Small Julia project for parsing feature-selection landscapes, generating a synthetic triangle landscape, and visualizing landscape structure.
 
-Structure:
+## Structure
 
-- `src/datasets.jl`: dataset paths and output locations
-- `src/parser.jl`: parse one HDF5 dataset and write CSV
-- `src/landscape.jl`: load CSV lookup tables and apply penalty
-- `main.jl`: project entrypoint
+- `src/datasets.jl`: dataset paths and default output paths
+- `src/types.jl`: shared `Landscape` and `HBMNode` types
+- `src/parser.jl`: parse HDF5 datasets and write CSV lookup tables
+- `src/landscape.jl`: load CSV lookup tables and evaluate fitness/penalties
+- `src/triangle.jl`: triangle fitness function and synthetic landscape generator
+- `src/hbm.jl`: HBM mapping, one-flip neighbors, and optima detection
+- `src/visualization.jl`: HBM and feature-count plotting
 
-Run:
+## Commands
+
+Available landscape keys:
+
+- real datasets: `breast-w`, `credit-a`, `letter-r`
+- synthetic dataset: `triangle`
+
+Parse a real HDF5 dataset to CSV:
 
 ```bash
-julia --project=. main.jl credit-a
+julia --project=. parse_landscape.jl breast-w
+```
+
+Create an HBM plot for a real dataset:
+
+```bash
+julia --project=. plot_hbm.jl breast-w
+julia --project=. plot_hbm.jl breast-w 0.01
+```
+
+Create an HBM plot for the synthetic triangle landscape:
+
+```bash
+julia --project=. plot_hbm.jl triangle
+```
+
+Create a fitness-by-feature-count plot:
+
+```bash
+julia --project=. plot_feature_count.jl breast-w
+julia --project=. plot_feature_count.jl breast-w 0.01
+julia --project=. plot_feature_count.jl triangle
+```
+
+Run tests:
+
+```bash
+julia --project=. -e 'using Pkg; Pkg.test()'
 ```
