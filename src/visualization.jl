@@ -22,12 +22,12 @@ function top_local_optima(nodes::AbstractVector{HBMNode},
     return local_only[1:min(max_count, length(local_only))]
 end
 
-function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int)
+function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int; allow_zero::Bool = false)
     x = Float64[]
     y = Float64[]
     fitness = Float64[]
     labels = String[]
-    local_indices = local_optima(nodes, n_features)
+    local_indices = local_optima(nodes, n_features; allow_zero=allow_zero)
     global_indices = global_optima(nodes)
 
     for node in nodes
@@ -47,14 +47,23 @@ function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int)
     )
 end
 
+function hbm_plot_data(landscape::Landscape; values = fitness_values(landscape))
+    return hbm_plot_data(
+        build_hbm(landscape; values=values),
+        landscape.num_features;
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function plot_hbm(nodes::AbstractVector{HBMNode},
                   n_features::Int;
                   title::AbstractString = "HBM Plot",
                   fitness_label::AbstractString = "Fitness",
                   max_local_optima::Int = 50,
                   size::Tuple{Int, Int} = (2200, 1400),
-                  dpi::Int = 300)
-    plot_data = hbm_plot_data(nodes, n_features)
+                  dpi::Int = 300,
+                  allow_zero::Bool = false)
+    plot_data = hbm_plot_data(nodes, n_features; allow_zero=allow_zero)
     isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
 
     node_lookup = Dict(node.index => node for node in nodes)
@@ -209,6 +218,25 @@ function plot_hbm(nodes::AbstractVector{HBMNode},
     )
 end
 
+function plot_hbm(landscape::Landscape;
+                  values = fitness_values(landscape),
+                  title::AbstractString = "$(landscape.name) HBM Plot",
+                  fitness_label::AbstractString = "Fitness",
+                  max_local_optima::Int = 50,
+                  size::Tuple{Int, Int} = (2200, 1400),
+                  dpi::Int = 300)
+    return plot_hbm(
+        build_hbm(landscape; values=values),
+        landscape.num_features;
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function save_hbm_plot(nodes::AbstractVector{HBMNode},
                        n_features::Int,
                        output_path::AbstractString;
@@ -216,10 +244,34 @@ function save_hbm_plot(nodes::AbstractVector{HBMNode},
                        fitness_label::AbstractString = "Fitness",
                        max_local_optima::Int = 50,
                        size::Tuple{Int, Int} = (2200, 1400),
-                       dpi::Int = 300)
+                       dpi::Int = 300,
+                       allow_zero::Bool = false)
     plt = plot_hbm(
         nodes,
         n_features;
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+        allow_zero=allow_zero,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function save_hbm_plot(landscape::Landscape,
+                       output_path::AbstractString;
+                       values = fitness_values(landscape),
+                       title::AbstractString = "$(landscape.name) HBM Plot",
+                       fitness_label::AbstractString = "Fitness",
+                       max_local_optima::Int = 50,
+                       size::Tuple{Int, Int} = (2200, 1400),
+                       dpi::Int = 300)
+    plt = plot_hbm(
+        landscape;
+        values=values,
         title=title,
         fitness_label=fitness_label,
         max_local_optima=max_local_optima,

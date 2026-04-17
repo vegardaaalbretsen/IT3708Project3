@@ -48,6 +48,21 @@ end
     @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.1)[1], landscape.accuracy[1] - 0.1; atol=1e-12)
 end
 
+@testset "Triangle landscape" begin
+    landscape = triangle_landscape()
+
+    @test landscape isa Landscape
+    @test landscape.name == "triangle"
+    @test landscape.num_features == 16
+    @test landscape.allow_zero == true
+    @test length(landscape.indices) == 65536
+    @test first(landscape.indices) == 0
+    @test last(landscape.indices) == 65535
+    @test all(==(0.0), landscape.time)
+    @test IT3708Project3.fitness(landscape, 0) == 0.0
+    @test IT3708Project3.fitness(landscape, 15) == 4.0
+end
+
 @testset "HBM" begin
     @test sort(one_flip_neighbors(1, 4)) == [3, 5, 9]
     @test sort(one_flip_neighbors(7, 4)) == [3, 5, 6, 15]
@@ -72,4 +87,23 @@ end
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
+end
+
+@testset "Landscape HBM methods" begin
+    landscape = Landscape(
+        "tiny",
+        3,
+        collect(0:7),
+        count_ones.(collect(0:7)),
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.7, 0.6, 0.7],
+        zeros(8),
+        true,
+    )
+
+    nodes = build_hbm(landscape)
+
+    @test length(nodes) == 8
+    @test nodes[1] == HBMNode(0, 0.0, 0, 0)
+    @test sort(local_optima(landscape)) == [5, 7]
+    @test sort(global_optima(landscape)) == [5, 7]
 end
