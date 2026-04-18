@@ -1,15 +1,8 @@
-struct HBMNode
-    index::Int
-    fitness::Float64
-    x::Int
-    y::Int
-end
-
-function one_flip_neighbors(index::Int, n_features::Int)
+function one_flip_neighbors(index::Int, n_features::Int; allow_zero::Bool = false)
     neighbors = Int[]
     for i in 1:n_features
-        flipped = (index ⊻ (1 << (i - 1)))
-        if flipped != 0
+        flipped = xor(index, 1 << (i - 1))
+        if allow_zero || flipped != 0
             push!(neighbors, flipped)
         end
     end
@@ -36,14 +29,19 @@ function build_hbm(indices::AbstractVector{<:Integer},
     return nodes
 end
 
-function local_optima(nodes::AbstractVector{HBMNode}, n_features::Int)
+function build_hbm(landscape::Landscape; values = fitness_values(landscape))
+    return build_hbm(landscape.indices, values, landscape.num_features)
+end
+
+function local_optima(nodes::AbstractVector{HBMNode}, n_features::Int; allow_zero::Bool = false)
     optima = Int[]
     fitness_lookup = Dict(node.index => node.fitness for node in nodes)
 
     for node in nodes
         is_local = true
 
-        for neighbor in one_flip_neighbors(node.index, n_features)
+        for neighbor in one_flip_neighbors(node.index, n_features; allow_zero=allow_zero)
+            haskey(fitness_lookup, neighbor) || continue
             if node.fitness < fitness_lookup[neighbor]
                 is_local = false
                 break
@@ -58,9 +56,18 @@ function local_optima(nodes::AbstractVector{HBMNode}, n_features::Int)
     return optima
 end
 
+function local_optima(landscape::Landscape; values = fitness_values(landscape))
+    nodes = build_hbm(landscape; values=values)
+    return local_optima(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
+end
+
 function global_optima(nodes::AbstractArray{HBMNode})
     isempty(nodes) && return Int[]
 
     best_fitness = maximum(node.fitness for node in nodes)
     return [node.index for node in nodes if node.fitness == best_fitness]
+end
+
+function global_optima(landscape::Landscape; values = fitness_values(landscape))
+    return global_optima(build_hbm(landscape; values=values))
 end

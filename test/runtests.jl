@@ -3,14 +3,18 @@ using Test
 
 @testset "Real landscape parsing" begin
     dataset = IT3708Project3.DATASETS["breast-w"]
-    data = IT3708Project3.parse_dataset(dataset.path, dataset.num_features)
+    data = IT3708Project3.parse_dataset(dataset.path, dataset.num_features; name="breast-w")
 
+    @test data isa Landscape
+    @test data.name == "breast-w"
+    @test data.num_features == 9
+    @test data.allow_zero == false
     @test length(data.indices) == 511
-    @test data.mean_accuracy[1] ≈ 0.7878048419952393 atol = 1e-9
-    @test data.mean_accuracy[end] ≈ 0.9672255516052246 atol = 1e-9
-    @test data.mean_time[1] ≈ 0.08813527971506119 atol = 1e-9
-    @test data.num_features[1] == 1
-    @test data.num_features[3] == 2
+    @test isapprox(data.accuracy[1], 0.7878048419952393; atol=1e-9)
+    @test isapprox(data.accuracy[end], 0.9672255516052246; atol=1e-9)
+    @test isapprox(data.time[1], 0.08813527971506119; atol=1e-9)
+    @test data.num_selected[1] == 1
+    @test data.num_selected[3] == 2
 
     output_csv = tempname() * ".csv"
     IT3708Project3.write_csv(data, output_csv)
@@ -22,22 +26,41 @@ end
 
 @testset "CSV landscape" begin
     dataset = IT3708Project3.DATASETS["breast-w"]
-    parsed = IT3708Project3.parse_dataset(dataset.path, dataset.num_features)
+    parsed = IT3708Project3.parse_dataset(dataset.path, dataset.num_features; name="breast-w")
     output_csv = tempname() * ".csv"
     IT3708Project3.write_csv(parsed, output_csv)
 
-    landscape = IT3708Project3.load_landscape(output_csv)
-    penalized = IT3708Project3.apply_penalty(landscape, 0.1)
+    landscape = IT3708Project3.load_landscape(output_csv, dataset.num_features; name="breast-w")
 
+    @test landscape isa Landscape
+    @test landscape.name == "breast-w"
+    @test landscape.num_features == 9
+    @test landscape.allow_zero == false
     @test length(landscape.indices) == 511
     @test landscape.indices[1] == 1
-    @test landscape.num_features[1] == 1
-    @test landscape.mean_accuracy[1] ≈ parsed.mean_accuracy[1] atol = 1e-12
-    @test landscape.mean_time[1] ≈ parsed.mean_time[1] atol = 1e-12
-    @test IT3708Project3.penalty(3, 0.1) ≈ 0.3 atol = 1e-12
-    @test IT3708Project3.penalized_fitness(0.8, 3, 0.1) ≈ 0.5 atol = 1e-12
-    @test penalized.penalties[1] ≈ 0.1 atol = 1e-12
-    @test penalized.fitness[1] ≈ landscape.mean_accuracy[1] - 0.1 atol = 1e-12
+    @test landscape.num_selected[1] == 1
+    @test isapprox(landscape.accuracy[1], parsed.accuracy[1]; atol=1e-12)
+    @test isapprox(landscape.time[1], parsed.time[1]; atol=1e-12)
+    @test isapprox(IT3708Project3.fitness(landscape, 1), parsed.accuracy[1]; atol=1e-12)
+    @test_throws ArgumentError IT3708Project3.fitness(landscape, 0)
+    @test isapprox(IT3708Project3.penalty(3, 0.1), 0.3; atol=1e-12)
+    @test isapprox(IT3708Project3.penalized_fitness(0.8, 3, 0.1), 0.5; atol=1e-12)
+    @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.1)[1], landscape.accuracy[1] - 0.1; atol=1e-12)
+end
+
+@testset "Triangle landscape" begin
+    landscape = triangle_landscape()
+
+    @test landscape isa Landscape
+    @test landscape.name == "triangle"
+    @test landscape.num_features == 16
+    @test landscape.allow_zero == true
+    @test length(landscape.indices) == 65536
+    @test first(landscape.indices) == 0
+    @test last(landscape.indices) == 65535
+    @test all(==(0.0), landscape.time)
+    @test IT3708Project3.fitness(landscape, 0) == 0.0
+    @test IT3708Project3.fitness(landscape, 15) == 4.0
 end
 
 @testset "HBM" begin
@@ -61,6 +84,34 @@ end
 
     output_png = tempname() * ".png"
     exported_path = save_hbm_plot(nodes, 3, output_png; title="HBM Test")
+    @test exported_path == output_png
+    @test isfile(output_png)
+    @test filesize(output_png) > 0
+end
+
+@testset "Landscape visualization methods" begin
+    landscape = Landscape(
+        "tiny",
+        3,
+        collect(0:7),
+        count_ones.(collect(0:7)),
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.7, 0.6, 0.7],
+        zeros(8),
+        true,
+    )
+
+    nodes = build_hbm(landscape)
+    plot_data = feature_count_plot_data(landscape)
+
+    @test length(nodes) == 8
+    @test nodes[1] == HBMNode(0, 0.0, 0, 0)
+    @test sort(local_optima(landscape)) == [5, 7]
+    @test sort(global_optima(landscape)) == [5, 7]
+    @test plot_data.feature_counts == [0, 1, 2, 3]
+    @test plot_data.max_fitness == [0.0, 0.4, 0.7, 0.7]
+
+    output_png = tempname() * ".png"
+    exported_path = save_fitness_by_feature_count_plot(landscape, output_png; title="Feature Count Test")
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0

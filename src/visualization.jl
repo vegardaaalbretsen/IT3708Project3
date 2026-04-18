@@ -1,4 +1,5 @@
 using Plots
+using Statistics
 
 function hbm_marker_sizes(x_cells::Int, y_cells::Int)
     base_size = clamp(min(520 / x_cells, 340 / y_cells), 1.5, 18.0)
@@ -22,12 +23,12 @@ function top_local_optima(nodes::AbstractVector{HBMNode},
     return local_only[1:min(max_count, length(local_only))]
 end
 
-function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int)
+function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int; allow_zero::Bool = false)
     x = Float64[]
     y = Float64[]
     fitness = Float64[]
     labels = String[]
-    local_indices = local_optima(nodes, n_features)
+    local_indices = local_optima(nodes, n_features; allow_zero=allow_zero)
     global_indices = global_optima(nodes)
 
     for node in nodes
@@ -47,14 +48,23 @@ function hbm_plot_data(nodes::AbstractVector{HBMNode}, n_features::Int)
     )
 end
 
+function hbm_plot_data(landscape::Landscape; values = fitness_values(landscape))
+    return hbm_plot_data(
+        build_hbm(landscape; values=values),
+        landscape.num_features;
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function plot_hbm(nodes::AbstractVector{HBMNode},
                   n_features::Int;
                   title::AbstractString = "HBM Plot",
                   fitness_label::AbstractString = "Fitness",
                   max_local_optima::Int = 50,
                   size::Tuple{Int, Int} = (2200, 1400),
-                  dpi::Int = 300)
-    plot_data = hbm_plot_data(nodes, n_features)
+                  dpi::Int = 300,
+                  allow_zero::Bool = false)
+    plot_data = hbm_plot_data(nodes, n_features; allow_zero=allow_zero)
     isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
 
     node_lookup = Dict(node.index => node for node in nodes)
@@ -209,6 +219,25 @@ function plot_hbm(nodes::AbstractVector{HBMNode},
     )
 end
 
+function plot_hbm(landscape::Landscape;
+                  values = fitness_values(landscape),
+                  title::AbstractString = "$(landscape.name) HBM Plot",
+                  fitness_label::AbstractString = "Fitness",
+                  max_local_optima::Int = 50,
+                  size::Tuple{Int, Int} = (2200, 1400),
+                  dpi::Int = 300)
+    return plot_hbm(
+        build_hbm(landscape; values=values),
+        landscape.num_features;
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function save_hbm_plot(nodes::AbstractVector{HBMNode},
                        n_features::Int,
                        output_path::AbstractString;
@@ -216,13 +245,158 @@ function save_hbm_plot(nodes::AbstractVector{HBMNode},
                        fitness_label::AbstractString = "Fitness",
                        max_local_optima::Int = 50,
                        size::Tuple{Int, Int} = (2200, 1400),
-                       dpi::Int = 300)
+                       dpi::Int = 300,
+                       allow_zero::Bool = false)
     plt = plot_hbm(
         nodes,
         n_features;
         title=title,
         fitness_label=fitness_label,
         max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+        allow_zero=allow_zero,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function save_hbm_plot(landscape::Landscape,
+                       output_path::AbstractString;
+                       values = fitness_values(landscape),
+                       title::AbstractString = "$(landscape.name) HBM Plot",
+                       fitness_label::AbstractString = "Fitness",
+                       max_local_optima::Int = 50,
+                       size::Tuple{Int, Int} = (2200, 1400),
+                       dpi::Int = 300)
+    plt = plot_hbm(
+        landscape;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function feature_count_plot_data(landscape::Landscape; values = fitness_values(landscape))
+    length(values) == length(landscape.indices) || throw(ArgumentError("values must match landscape size"))
+
+    counts = sort(unique(landscape.num_selected))
+    means = Float64[]
+    maximums = Float64[]
+
+    for count in counts
+        positions = findall(==(count), landscape.num_selected)
+        count_values = Float64[values[position] for position in positions]
+        push!(means, mean(count_values))
+        push!(maximums, maximum(count_values))
+    end
+
+    return (
+        feature_counts = counts,
+        mean_fitness = means,
+        max_fitness = maximums,
+        local_optima = local_optima(landscape; values=values),
+        global_optima = global_optima(landscape; values=values),
+    )
+end
+
+function plot_fitness_by_feature_count(landscape::Landscape;
+                                       values = fitness_values(landscape),
+                                       title::AbstractString = "$(landscape.name) Fitness by Feature Count",
+                                       fitness_label::AbstractString = "Fitness",
+                                       size::Tuple{Int, Int} = (1400, 900),
+                                       dpi::Int = 200)
+    plot_data = feature_count_plot_data(landscape; values=values)
+    value_lookup = Dict(landscape.indices[i] => Float64(values[i]) for i in eachindex(landscape.indices))
+    count_lookup = Dict(landscape.indices[i] => landscape.num_selected[i] for i in eachindex(landscape.indices))
+
+    plt = scatter(
+        landscape.num_selected,
+        values;
+        ms = 3.0,
+        markeralpha = 0.28,
+        markercolor = :gray35,
+        markerstrokewidth = 0,
+        label = "Subsets",
+        xlabel = "Number of selected features",
+        ylabel = fitness_label,
+        title = title,
+        legend = :bottomright,
+        xlims = (0, landscape.num_features + 0.5),
+        xticks = 0:landscape.num_features,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        size = size,
+        dpi = dpi,
+    )
+
+    plot!(
+        plt,
+        plot_data.feature_counts,
+        plot_data.mean_fitness;
+        linewidth = 3,
+        color = :dodgerblue3,
+        label = "Mean",
+    )
+
+    plot!(
+        plt,
+        plot_data.feature_counts,
+        plot_data.max_fitness;
+        linewidth = 3,
+        color = :darkorange3,
+        label = "Best per count",
+    )
+
+    if !isempty(plot_data.local_optima)
+        scatter!(
+            plt,
+            [count_lookup[index] for index in plot_data.local_optima],
+            [value_lookup[index] for index in plot_data.local_optima];
+            ms = 5.5,
+            markercolor = :purple3,
+            markeralpha = 0.9,
+            markerstrokewidth = 0,
+            label = "Local optima",
+        )
+    end
+
+    if !isempty(plot_data.global_optima)
+        scatter!(
+            plt,
+            [count_lookup[index] for index in plot_data.global_optima],
+            [value_lookup[index] for index in plot_data.global_optima];
+            ms = 8.0,
+            markercolor = :red2,
+            markeralpha = 1.0,
+            markerstrokewidth = 0,
+            label = "Global optima",
+        )
+    end
+
+    return plt
+end
+
+function save_fitness_by_feature_count_plot(landscape::Landscape,
+                                            output_path::AbstractString;
+                                            values = fitness_values(landscape),
+                                            title::AbstractString = "$(landscape.name) Fitness by Feature Count",
+                                            fitness_label::AbstractString = "Fitness",
+                                            size::Tuple{Int, Int} = (1400, 900),
+                                            dpi::Int = 200)
+    plt = plot_fitness_by_feature_count(
+        landscape;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
         size=size,
         dpi=dpi,
     )

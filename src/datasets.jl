@@ -3,6 +3,7 @@ const RAW_DATA_DIR = joinpath(PROJECT_ROOT, "data", "raw")
 const CSV_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "csv")
 const PLOT_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "plots")
 const HBM_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "hbm")
+const FEATURE_COUNT_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "feature_count")
 
 const DATASETS = Dict(
     "breast-w" => (
@@ -25,4 +26,8 @@ end
 
 function default_hbm_plot_path(name::AbstractString)
     return joinpath(HBM_PLOT_EXPORT_DIR, "$(name)_hbm.png")
+end
+
+function default_feature_count_plot_path(name::AbstractString)
+    return joinpath(FEATURE_COUNT_PLOT_EXPORT_DIR, "$(name).png")
 end
