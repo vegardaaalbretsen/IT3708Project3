@@ -150,6 +150,10 @@ end
     @test raw_result.best_num_selected == 2
     @test length(raw_result.current_history) == 21
     @test length(raw_result.best_history) == 21
+    @test length(raw_result.current_num_selected_history) == 21
+    @test length(raw_result.best_num_selected_history) == 21
+    @test raw_result.current_index_history[1] == 0
+    @test raw_result.best_index_history[end] == 3
 
     penalized_result = run_standard_ea(
         tiny;
@@ -165,4 +169,17 @@ end
     @test penalized_result.best_num_selected == 1
     @test penalized_result.current_history === nothing
     @test penalized_result.best_history === nothing
+    @test penalized_result.current_num_selected_history === nothing
+    @test penalized_result.best_num_selected_history === nothing
+
+    trace_data = ea_trace_plot_data(raw_result)
+    @test trace_data.iterations == collect(0:20)
+    @test trace_data.current_fitness == raw_result.current_history
+    @test trace_data.best_num_selected == raw_result.best_num_selected_history
+
+    output_png = tempname() * ".png"
+    exported_path = save_ea_trace_plot(raw_result, output_png; title="EA Trace Test")
+    @test exported_path == output_png
+    @test isfile(output_png)
+    @test filesize(output_png) > 0
 end

@@ -55,6 +55,14 @@ julia --project=. run_ea.jl breast-w 10000 0.01
 julia --project=. run_ea.jl triangle 5000 0.0 42 0
 ```
 
+Create an EA trace plot:
+
+```bash
+julia --project=. plot_ea.jl breast-w
+julia --project=. plot_ea.jl breast-w 10000 0.01 42
+julia --project=. plot_ea.jl triangle 5000 0.1 42 0
+```
+
 Run tests:
 
 ```bash

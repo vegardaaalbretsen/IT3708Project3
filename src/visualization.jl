@@ -404,3 +404,112 @@ function save_fitness_by_feature_count_plot(landscape::Landscape,
     savefig(plt, output_path)
     return output_path
 end
+
+function ea_trace_plot_data(result)
+    current_history = getproperty(result, :current_history)
+    best_history = getproperty(result, :best_history)
+    current_num_selected_history = getproperty(result, :current_num_selected_history)
+    best_num_selected_history = getproperty(result, :best_num_selected_history)
+
+    any(isnothing, (current_history, best_history, current_num_selected_history, best_num_selected_history)) &&
+        throw(ArgumentError("EA history is missing. Run run_standard_ea(...; keep_history=true) before plotting."))
+
+    return (
+        iterations = collect(0:(length(current_history) - 1)),
+        current_fitness = current_history,
+        best_fitness = best_history,
+        current_num_selected = current_num_selected_history,
+        best_num_selected = best_num_selected_history,
+    )
+end
+
+function plot_ea_trace(result;
+                       title::AbstractString = "Standard EA Trace",
+                       fitness_label::AbstractString = "Penalized fitness",
+                       size::Tuple{Int, Int} = (1400, 900),
+                       dpi::Int = 200)
+    plot_data = ea_trace_plot_data(result)
+    max_count = max(maximum(plot_data.current_num_selected), maximum(plot_data.best_num_selected))
+
+    fitness_plt = plot(
+        plot_data.iterations,
+        plot_data.current_fitness;
+        linewidth = 2.5,
+        color = :dodgerblue3,
+        label = "Current",
+        ylabel = fitness_label,
+        title = title,
+        legend = :bottomright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+        titlefontsize = 16,
+    )
+
+    plot!(
+        fitness_plt,
+        plot_data.iterations,
+        plot_data.best_fitness;
+        linewidth = 3.0,
+        color = :darkorange3,
+        label = "Best so far",
+    )
+
+    count_plt = plot(
+        plot_data.iterations,
+        plot_data.current_num_selected;
+        linewidth = 2.5,
+        color = :darkgreen,
+        label = "Current",
+        xlabel = "Iteration",
+        ylabel = "Selected features",
+        legend = :topright,
+        ylims = (-0.2, max_count + 0.2),
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    plot!(
+        count_plt,
+        plot_data.iterations,
+        plot_data.best_num_selected;
+        linewidth = 3.0,
+        color = :purple3,
+        label = "Best so far",
+    )
+
+    return plot(
+        fitness_plt,
+        count_plt;
+        layout = grid(2, 1, heights = [0.62, 0.38]),
+        size = size,
+        dpi = dpi,
+        background_color = :white,
+        link = :x,
+    )
+end
+
+function save_ea_trace_plot(result,
+                            output_path::AbstractString;
+                            title::AbstractString = "Standard EA Trace",
+                            fitness_label::AbstractString = "Penalized fitness",
+                            size::Tuple{Int, Int} = (1400, 900),
+                            dpi::Int = 200)
+    plt = plot_ea_trace(
+        result;
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end

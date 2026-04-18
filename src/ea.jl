@@ -83,6 +83,12 @@ function run_standard_ea(landscape::Landscape;
 
     current_history = keep_history ? Float64[start.penalized_fitness] : Float64[]
     best_history = keep_history ? Float64[start.penalized_fitness] : Float64[]
+    current_accuracy_history = keep_history ? Float64[start.accuracy] : Float64[]
+    best_accuracy_history = keep_history ? Float64[start.accuracy] : Float64[]
+    current_num_selected_history = keep_history ? Int[start.num_selected] : Int[]
+    best_num_selected_history = keep_history ? Int[start.num_selected] : Int[]
+    current_index_history = keep_history ? Int[start.index] : Int[]
+    best_index_history = keep_history ? Int[start.index] : Int[]
 
     for _ in 1:Int(iterations)
         child_index = standard_bit_mutation(
@@ -105,6 +111,12 @@ function run_standard_ea(landscape::Landscape;
         if keep_history
             push!(current_history, current.penalized_fitness)
             push!(best_history, best.penalized_fitness)
+            push!(current_accuracy_history, current.accuracy)
+            push!(best_accuracy_history, best.accuracy)
+            push!(current_num_selected_history, current.num_selected)
+            push!(best_num_selected_history, best.num_selected)
+            push!(current_index_history, current.index)
+            push!(best_index_history, best.index)
         end
     end
 
@@ -127,5 +139,11 @@ function run_standard_ea(landscape::Landscape;
         best_num_selected = best.num_selected,
         current_history = keep_history ? current_history : nothing,
         best_history = keep_history ? best_history : nothing,
+        current_accuracy_history = keep_history ? current_accuracy_history : nothing,
+        best_accuracy_history = keep_history ? best_accuracy_history : nothing,
+        current_num_selected_history = keep_history ? current_num_selected_history : nothing,
+        best_num_selected_history = keep_history ? best_num_selected_history : nothing,
+        current_index_history = keep_history ? current_index_history : nothing,
+        best_index_history = keep_history ? best_index_history : nothing,
     )
 end
