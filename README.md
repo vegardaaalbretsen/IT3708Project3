@@ -8,6 +8,7 @@ Small Julia project for parsing feature-selection landscapes, generating a synth
 - `src/types.jl`: shared `Landscape` and `HBMNode` types
 - `src/parser.jl`: parse HDF5 datasets and write CSV lookup tables
 - `src/landscape.jl`: load CSV lookup tables and evaluate fitness/penalties
+- `src/ea.jl`: standard `(1+1)` EA with `1/n` bit-flip mutation
 - `src/triangle.jl`: triangle fitness function and synthetic landscape generator
 - `src/hbm.jl`: HBM mapping, one-flip neighbors, and optima detection
 - `src/visualization.jl`: HBM and feature-count plotting
@@ -44,6 +45,14 @@ Create a fitness-by-feature-count plot:
 julia --project=. plot_feature_count.jl breast-w
 julia --project=. plot_feature_count.jl breast-w 0.01
 julia --project=. plot_feature_count.jl triangle
+```
+
+Run the standard EA on a landscape:
+
+```bash
+julia --project=. run_ea.jl breast-w
+julia --project=. run_ea.jl breast-w 10000 0.01
+julia --project=. run_ea.jl triangle 5000 0.0 42 0
 ```
 
 Run tests:

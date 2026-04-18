@@ -1,4 +1,5 @@
 using IT3708Project3
+using Random
 using Test
 
 @testset "Real landscape parsing" begin
@@ -115,4 +116,53 @@ end
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
+end
+
+@testset "Standard EA" begin
+    tiny = Landscape(
+        "tiny-ea",
+        2,
+        collect(0:3),
+        count_ones.(collect(0:3)),
+        [0.0, 0.8, 0.9, 1.0],
+        zeros(4),
+        true,
+    )
+
+    rng = MersenneTwister(7)
+    for _ in 1:100
+        child = standard_bit_mutation(1, 2; rng=rng, allow_zero=false)
+        @test 1 <= child <= 3
+    end
+
+    raw_result = run_standard_ea(
+        tiny;
+        iterations=20,
+        epsilon=0.0,
+        initial_index=0,
+        rng=MersenneTwister(11),
+        keep_history=true,
+    )
+
+    @test raw_result.best_index == 3
+    @test raw_result.best_accuracy == 1.0
+    @test raw_result.best_penalized_fitness == 1.0
+    @test raw_result.best_num_selected == 2
+    @test length(raw_result.current_history) == 21
+    @test length(raw_result.best_history) == 21
+
+    penalized_result = run_standard_ea(
+        tiny;
+        iterations=20,
+        epsilon=0.15,
+        initial_index=3,
+        rng=MersenneTwister(5),
+    )
+
+    @test penalized_result.best_index == 2
+    @test penalized_result.best_accuracy == 0.9
+    @test isapprox(penalized_result.best_penalized_fitness, 0.75; atol=1e-12)
+    @test penalized_result.best_num_selected == 1
+    @test penalized_result.current_history === nothing
+    @test penalized_result.best_history === nothing
 end

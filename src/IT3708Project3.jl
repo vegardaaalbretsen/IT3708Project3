@@ -4,6 +4,7 @@ include("datasets.jl")
 include("types.jl")
 include("parser.jl")
 include("landscape.jl")
+include("ea.jl")
 include("triangle.jl")
 include("hbm.jl")
 include("visualization.jl")
@@ -22,6 +23,8 @@ export DATASETS,
        fitness,
        penalty,
        penalized_fitness,
+       standard_bit_mutation,
+       run_standard_ea,
        triangle_fitness,
        triangle_landscape,
        HBMNode,
