@@ -39,6 +39,8 @@ export DATASETS,
        feature_count_plot_data,
        plot_fitness_by_feature_count,
        save_fitness_by_feature_count_plot,
+       plot_fitness_by_feature_count_with_ea,
+       save_fitness_by_feature_count_with_ea_plot,
        ea_trace_plot_data,
        plot_ea_trace,
        save_ea_trace_plot

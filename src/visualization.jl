@@ -513,3 +513,121 @@ function save_ea_trace_plot(result,
     savefig(plt, output_path)
     return output_path
 end
+
+function compress_ea_path(feature_counts::AbstractVector{<:Integer},
+                          fitness_values::AbstractVector{<:Real})
+    length(feature_counts) == length(fitness_values) ||
+        throw(ArgumentError("feature_counts and fitness_values must have the same length"))
+    isempty(feature_counts) && return Int[]
+
+    positions = Int[1]
+    for i in 2:length(feature_counts)
+        if feature_counts[i] != feature_counts[i - 1] || fitness_values[i] != fitness_values[i - 1]
+            push!(positions, i)
+        end
+    end
+
+    return positions
+end
+
+function plot_fitness_by_feature_count_with_ea(landscape::Landscape,
+                                               result;
+                                               values = fitness_values(landscape),
+                                               title::AbstractString = "$(landscape.name) Fitness by Feature Count with EA Path",
+                                               fitness_label::AbstractString = "Fitness",
+                                               size::Tuple{Int, Int} = (1400, 900),
+                                               dpi::Int = 200)
+    plt = plot_fitness_by_feature_count(
+        landscape;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+
+    trace_data = ea_trace_plot_data(result)
+    path_positions = compress_ea_path(trace_data.current_num_selected, trace_data.current_fitness)
+    path_counts = [trace_data.current_num_selected[i] for i in path_positions]
+    path_fitness = [trace_data.current_fitness[i] for i in path_positions]
+
+    plot!(
+        plt,
+        path_counts,
+        path_fitness;
+        linewidth = 2.5,
+        color = :black,
+        alpha = 0.65,
+        label = "EA path",
+    )
+
+    scatter!(
+        plt,
+        path_counts,
+        path_fitness;
+        ms = 4.2,
+        markercolor = :black,
+        markeralpha = 0.45,
+        markerstrokewidth = 0,
+        label = "",
+    )
+
+    scatter!(
+        plt,
+        [path_counts[1]],
+        [path_fitness[1]];
+        ms = 8.0,
+        markershape = :diamond,
+        markercolor = :white,
+        markerstrokecolor = :black,
+        markerstrokewidth = 1.8,
+        label = "EA start",
+    )
+
+    scatter!(
+        plt,
+        [path_counts[end]],
+        [path_fitness[end]];
+        ms = 9.0,
+        markershape = :utriangle,
+        markercolor = :forestgreen,
+        markerstrokewidth = 0,
+        label = "EA end",
+    )
+
+    scatter!(
+        plt,
+        [getproperty(result, :best_num_selected)],
+        [getproperty(result, :best_penalized_fitness)];
+        ms = 10.0,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.8,
+        label = "EA best",
+    )
+
+    return plt
+end
+
+function save_fitness_by_feature_count_with_ea_plot(landscape::Landscape,
+                                                    result,
+                                                    output_path::AbstractString;
+                                                    values = fitness_values(landscape),
+                                                    title::AbstractString = "$(landscape.name) Fitness by Feature Count with EA Path",
+                                                    fitness_label::AbstractString = "Fitness",
+                                                    size::Tuple{Int, Int} = (1400, 900),
+                                                    dpi::Int = 200)
+    plt = plot_fitness_by_feature_count_with_ea(
+        landscape,
+        result;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end

@@ -182,4 +182,12 @@ end
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
+
+    overlay_png = tempname() * ".png"
+    overlay_path = save_fitness_by_feature_count_with_ea_plot(tiny, raw_result, overlay_png; title="EA Feature Count Test")
+    @test overlay_path == overlay_png
+    @test isfile(overlay_png)
+    @test filesize(overlay_png) > 0
+
+    @test_throws ArgumentError plot_fitness_by_feature_count_with_ea(tiny, penalized_result)
 end
