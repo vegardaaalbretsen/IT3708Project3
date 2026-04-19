@@ -2,8 +2,9 @@ using IT3708Project3
 using Random
 
 function usage()
-    println("Usage: julia --project=. run_ea.jl <dataset-key|triangle> [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
-    println("       julia --project=. run_ea.jl <dataset-key|triangle> [iterations] [epsilon] [--seed N] [--initial-index I] [--plot none|trace|feature-count|both] [--output path]")
+    println("Usage: julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
+    println("       julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--plot none|trace|feature-count|both] [--output path]")
+    println("       dataset-key defaults to \"breast-w\" when omitted")
     println("")
     println("Plot kinds: none, trace, feature-count, both")
     println("")
