@@ -182,6 +182,67 @@ end
     @test overlay_path == overlay_png
     @test isfile(overlay_png)
     @test filesize(overlay_png) > 0
+
+    no_history = run_single_objective_ea(
+        tiny;
+        iterations=8,
+        epsilon=0.0,
+        initial_index=3,
+        population_size=8,
+        rng=MersenneTwister(17),
+        keep_history=false,
+    )
+
+    @test no_history.best_index == 3
+    @test no_history.initial_index == 3
+    @test no_history.current_history === nothing
+    @test no_history.best_history === nothing
+    @test no_history.current_accuracy_history === nothing
+    @test no_history.best_accuracy_history === nothing
+    @test no_history.current_num_selected_history === nothing
+    @test no_history.best_num_selected_history === nothing
+    @test no_history.current_index_history === nothing
+    @test no_history.best_index_history === nothing
+    @test no_history.mean_history === nothing
+    @test no_history.max_history === nothing
+    @test no_history.min_history === nothing
+    @test no_history.entropy_history === nothing
+
+    direct_params = IT3708Project3.GACore.GAParams(
+        popsize=3,
+        generations=0,
+        seed=1,
+        objective=:max,
+        record_history=false,
+    )
+    initial_population = BitVector[
+        BitVector([false, false]),
+        BitVector([true, false]),
+        BitVector([true, true]),
+    ]
+    best_ind, best_raw, worst_ind, worst_raw, history = IT3708Project3.GACore.run_ga(
+        2,
+        ind -> Float64(count(ind)),
+        initial_population;
+        params=direct_params,
+    )
+
+    @test best_ind == BitVector([true, true])
+    @test best_raw == 2.0
+    @test worst_ind == BitVector([false, false])
+    @test worst_raw == 0.0
+    @test history.max_hist === nothing
+    @test history.mean_hist === nothing
+    @test history.min_hist === nothing
+    @test history.ent_hist === nothing
+    @test history.current_best_raw_hist === nothing
+    @test history.current_best_ind_hist === nothing
+    @test history.best_so_far_raw_hist === nothing
+    @test history.best_so_far_ind_hist === nothing
+    @test history.initial_best_ind == BitVector([true, true])
+    @test history.initial_best_raw == 2.0
+    @test history.final_best_ind == BitVector([true, true])
+    @test history.final_best_raw == 2.0
 end
 
 @testset "Swarm EA" begin

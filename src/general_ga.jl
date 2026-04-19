@@ -16,6 +16,7 @@ Base.@kwdef mutable struct GAParams
     seed::Int = 42
     objective::Symbol = :max
     log_every::Int = 0
+    record_history::Bool = true
 
     # ----- generalized crowding -----
     crowding_alpha::Float64 = 0.0   # 0 = deterministic, 1 = probabilistic
@@ -143,7 +144,7 @@ If objective=:min, GA will minimize raw fitness (by maximizing -fitness).
 Returns:
 - best_ind: BitVector
 - best_raw: Float64  (best raw fitness according to objective)
-- history: named tuple of arrays: max/mean/min (raw), entropy
+- history: named tuple with optional per-generation traces and scalar initial/final-best state
 """
 function run_ga(nbits::Int, fitness_fn::Function; params::GAParams=GAParams())
     return run_ga(nbits, fitness_fn, nothing; params=params)
@@ -175,19 +176,24 @@ function run_ga(nbits::Int,
         length(ind) == nbits || throw(ArgumentError("All individuals must have length $nbits"))
     end
 
-    max_hist = Float64[]
-    mean_hist = Float64[]
-    min_hist = Float64[]
-    ent_hist = Float64[]
-    current_best_raw_hist = Float64[]
-    current_best_ind_hist = BitVector[]
-    best_so_far_raw_hist = Float64[]
-    best_so_far_ind_hist = BitVector[]
+    max_hist = params.record_history ? Float64[] : nothing
+    mean_hist = params.record_history ? Float64[] : nothing
+    min_hist = params.record_history ? Float64[] : nothing
+    ent_hist = params.record_history ? Float64[] : nothing
+    current_best_raw_hist = params.record_history ? Float64[] : nothing
+    current_best_ind_hist = params.record_history ? BitVector[] : nothing
+    best_so_far_raw_hist = params.record_history ? Float64[] : nothing
+    best_so_far_ind_hist = params.record_history ? BitVector[] : nothing
     best_ind = BitVector()
     best_raw = 0.0
     worst_ind = BitVector()
     worst_raw = 0.0
+    initial_best_ind = BitVector()
+    initial_best_raw = 0.0
+    final_best_position = 0
+    final_best_raw = 0.0
     seen_population = false
+    track_population_stats = params.record_history || params.log_every > 0
 
     better(a, b) = params.objective === :max ? (a > b) : (a < b)
     worse(a, b) = params.objective === :max ? (a < b) : (a > b)
@@ -205,12 +211,16 @@ function run_ga(nbits::Int,
         current_best_i = objective_best_index(raw, params.objective)
         current_worst_i = objective_worst_index(raw, params.objective)
         current_best_raw = raw[current_best_i]
+        current_mean_raw = track_population_stats ? mean(raw) : 0.0
+        current_entropy = track_population_stats ? entropy_bits(population) : 0.0
 
         if !seen_population
             best_raw = current_best_raw
             best_ind = copy(population[current_best_i])
             worst_raw = raw[current_worst_i]
             worst_ind = copy(population[current_worst_i])
+            initial_best_ind = copy(population[current_best_i])
+            initial_best_raw = current_best_raw
             seen_population = true
         else
             if better(current_best_raw, best_raw)
@@ -224,19 +234,24 @@ function run_ga(nbits::Int,
             end
         end
 
-        push!(max_hist, maximum(raw))
-        push!(mean_hist, mean(raw))
-        push!(min_hist, minimum(raw))
-        push!(ent_hist, entropy_bits(population))
-        push!(current_best_raw_hist, current_best_raw)
-        push!(current_best_ind_hist, copy(population[current_best_i]))
-        push!(best_so_far_raw_hist, best_raw)
-        push!(best_so_far_ind_hist, copy(best_ind))
+        final_best_position = current_best_i
+        final_best_raw = current_best_raw
 
-        return raw, score
+        if params.record_history
+            push!(max_hist, maximum(raw))
+            push!(mean_hist, current_mean_raw)
+            push!(min_hist, minimum(raw))
+            push!(ent_hist, current_entropy)
+            push!(current_best_raw_hist, current_best_raw)
+            push!(current_best_ind_hist, copy(population[current_best_i]))
+            push!(best_so_far_raw_hist, best_raw)
+            push!(best_so_far_ind_hist, copy(best_ind))
+        end
+
+        return raw, score, current_best_raw, current_mean_raw, current_entropy
     end
 
-    raw, score = record_population!(pop)
+    raw, score, current_best_raw, current_mean_raw, current_entropy = record_population!(pop)
 
     for gen in 1:params.generations
 
@@ -284,10 +299,10 @@ function run_ga(nbits::Int,
             error("Unknown survivor_mode: $(params.survivor_mode)")
         end
 
-        raw, score = record_population!(pop)
+        raw, score, current_best_raw, current_mean_raw, current_entropy = record_population!(pop)
 
         if params.log_every > 0 && (gen == 1 || gen % params.log_every == 0 || gen == params.generations)
-            println("gen=$gen  best=$(round(current_best_raw_hist[end], digits=5))  mean=$(round(mean_hist[end], digits=5))  entropy=$(round(ent_hist[end], digits=3))")
+            println("gen=$gen  best=$(round(current_best_raw, digits=5))  mean=$(round(current_mean_raw, digits=5))  entropy=$(round(current_entropy, digits=3))")
             flush(stdout)
         end
     end
@@ -301,6 +316,10 @@ function run_ga(nbits::Int,
         current_best_ind_hist = current_best_ind_hist,
         best_so_far_raw_hist = best_so_far_raw_hist,
         best_so_far_ind_hist = best_so_far_ind_hist,
+        initial_best_ind = initial_best_ind,
+        initial_best_raw = initial_best_raw,
+        final_best_ind = copy(pop[final_best_position]),
+        final_best_raw = final_best_raw,
         worst_raw = worst_raw,
     )
     return best_ind, best_raw, worst_ind, worst_raw, history

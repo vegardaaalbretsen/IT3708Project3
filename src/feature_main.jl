@@ -120,6 +120,7 @@ function run_single_objective_ea(landscape::Landscape;
         seed = seed,
         objective = :max,
         log_every = Int(log_every),
+        record_history = keep_history,
     )
 
     best_ind, best_raw, worst_ind, worst_raw, history = GACore.run_ga(
@@ -129,26 +130,38 @@ function run_single_objective_ea(landscape::Landscape;
         params=params,
     )
 
-    current_states = [
+    current_states = keep_history ? [
         candidate_state(
             landscape,
             decode_ga_individual(ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
             epsilon,
         )
         for ind in history.current_best_ind_hist
-    ]
-    best_states = [
+    ] : nothing
+    best_states = keep_history ? [
         candidate_state(
             landscape,
             decode_ga_individual(ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
             epsilon,
         )
         for ind in history.best_so_far_ind_hist
-    ]
+    ] : nothing
 
-    start = current_states[1]
-    final = current_states[end]
-    best = best_states[end]
+    start = keep_history ? current_states[1] : candidate_state(
+        landscape,
+        decode_ga_individual(history.initial_best_ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
+        epsilon,
+    )
+    final = keep_history ? current_states[end] : candidate_state(
+        landscape,
+        decode_ga_individual(history.final_best_ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
+        epsilon,
+    )
+    best = candidate_state(
+        landscape,
+        decode_ga_individual(best_ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
+        epsilon,
+    )
     worst = candidate_state(
         landscape,
         decode_ga_individual(worst_ind; allow_zero=landscape.allow_zero, repair_index=repair_index),
