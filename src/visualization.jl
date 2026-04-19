@@ -412,7 +412,7 @@ function ea_trace_plot_data(result)
     best_num_selected_history = getproperty(result, :best_num_selected_history)
 
     any(isnothing, (current_history, best_history, current_num_selected_history, best_num_selected_history)) &&
-        throw(ArgumentError("EA history is missing. Run run_standard_ea(...; keep_history=true) before plotting."))
+        throw(ArgumentError("EA history is missing. Run run_single_objective_ea(...; keep_history=true) before plotting."))
 
     return (
         iterations = collect(0:(length(current_history) - 1)),
@@ -424,7 +424,7 @@ function ea_trace_plot_data(result)
 end
 
 function plot_ea_trace(result;
-                       title::AbstractString = "Standard EA Trace",
+                       title::AbstractString = "EA Trace",
                        fitness_label::AbstractString = "Penalized fitness",
                        size::Tuple{Int, Int} = (1400, 900),
                        dpi::Int = 200)
@@ -498,7 +498,7 @@ end
 
 function save_ea_trace_plot(result,
                             output_path::AbstractString;
-                            title::AbstractString = "Standard EA Trace",
+                            title::AbstractString = "EA Trace",
                             fitness_label::AbstractString = "Penalized fitness",
                             size::Tuple{Int, Int} = (1400, 900),
                             dpi::Int = 200)
@@ -523,6 +523,22 @@ function compress_ea_path(feature_counts::AbstractVector{<:Integer},
     positions = Int[1]
     for i in 2:length(feature_counts)
         if feature_counts[i] != feature_counts[i - 1] || fitness_values[i] != fitness_values[i - 1]
+            push!(positions, i)
+        end
+    end
+
+    return positions
+end
+
+function compress_path_positions(x_values::AbstractVector,
+                                 y_values::AbstractVector)
+    length(x_values) == length(y_values) ||
+        throw(ArgumentError("x_values and y_values must have the same length"))
+    isempty(x_values) && return Int[]
+
+    positions = Int[1]
+    for i in 2:length(x_values)
+        if x_values[i] != x_values[i - 1] || y_values[i] != y_values[i - 1]
             push!(positions, i)
         end
     end
@@ -629,5 +645,765 @@ function save_fitness_by_feature_count_with_ea_plot(landscape::Landscape,
     )
     mkpath(dirname(output_path))
     savefig(plt, output_path)
+    return output_path
+end
+
+function swarm_iteration_state(result; iteration::Union{Nothing, Integer} = nothing)
+    if isnothing(iteration)
+        return (
+            iteration = getproperty(result, :iterations),
+            particle_indices = getproperty(result, :final_particle_indices),
+            best_index = getproperty(result, :best_index),
+            best_penalized_fitness = getproperty(result, :best_penalized_fitness),
+        )
+    end
+
+    particle_index_history = getproperty(result, :particle_index_history)
+    best_index_history = getproperty(result, :best_index_history)
+    best_penalized_fitness_history = getproperty(result, :best_penalized_fitness_history)
+
+    any(isnothing, (particle_index_history, best_index_history, best_penalized_fitness_history)) &&
+        throw(ArgumentError("Swarm history is missing. Run run_swarm_ea(...; keep_history=true) before plotting iteration-specific swarm visualizations or animations."))
+
+    0 <= iteration <= length(particle_index_history) - 1 ||
+        throw(ArgumentError("iteration must be between 0 and $(length(particle_index_history) - 1)"))
+
+    position = iteration + 1
+    return (
+        iteration = Int(iteration),
+        particle_indices = particle_index_history[position],
+        best_index = best_index_history[position],
+        best_penalized_fitness = best_penalized_fitness_history[position],
+    )
+end
+
+function swarm_snapshot_plot_data(landscape::Landscape,
+                                  result;
+                                  iteration::Union{Nothing, Integer} = nothing)
+    state = swarm_iteration_state(result; iteration=iteration)
+    counts_by_index = Dict{Int, Int}()
+
+    for index in state.particle_indices
+        counts_by_index[index] = get(counts_by_index, index, 0) + 1
+    end
+
+    unique_indices = sort!(collect(keys(counts_by_index)); by = index -> (count_ones(index), index))
+    epsilon = getproperty(result, :epsilon)
+
+    return (
+        iteration = state.iteration,
+        particle_indices = state.particle_indices,
+        unique_indices = unique_indices,
+        multiplicity = [counts_by_index[index] for index in unique_indices],
+        feature_counts = [count_ones(index) for index in unique_indices],
+        penalized_fitness = [candidate_state(landscape, index, epsilon).penalized_fitness for index in unique_indices],
+        best_index = state.best_index,
+        best_penalized_fitness = state.best_penalized_fitness,
+    )
+end
+
+function mean_pairwise_hamming_distance(indices::AbstractVector{<:Integer})
+    n = length(indices)
+    n <= 1 && return 0.0
+
+    distance_sum = 0
+    pair_count = 0
+
+    for i in 1:(n - 1)
+        for j in (i + 1):n
+            distance_sum += count_ones(xor(indices[i], indices[j]))
+            pair_count += 1
+        end
+    end
+
+    return distance_sum / pair_count
+end
+
+function swarm_trace_plot_data(landscape::Landscape, result)
+    particle_index_history = getproperty(result, :particle_index_history)
+    best_index_history = getproperty(result, :best_index_history)
+    best_penalized_fitness_history = getproperty(result, :best_penalized_fitness_history)
+
+    any(isnothing, (particle_index_history, best_index_history, best_penalized_fitness_history)) &&
+        throw(ArgumentError("Swarm history is missing. Run run_swarm_ea(...; keep_history=true) before plotting."))
+
+    epsilon = getproperty(result, :epsilon)
+    fitness_lookup = Dict(
+        index => candidate_state(landscape, index, epsilon).penalized_fitness
+        for index in landscape.indices
+    )
+
+    mean_fitness = Float64[]
+    median_fitness = Float64[]
+    unique_subsets = Int[]
+    mean_hamming_distance = Float64[]
+    global_best_fraction = Float64[]
+
+    for (position, snapshot) in pairs(particle_index_history)
+        snapshot_fitness = Float64[fitness_lookup[index] for index in snapshot]
+        push!(mean_fitness, mean(snapshot_fitness))
+        push!(median_fitness, median(snapshot_fitness))
+        push!(unique_subsets, length(unique(snapshot)))
+        push!(mean_hamming_distance, mean_pairwise_hamming_distance(snapshot))
+        push!(global_best_fraction, count(==(best_index_history[position]), snapshot) / length(snapshot))
+    end
+
+    return (
+        iterations = collect(0:(length(particle_index_history) - 1)),
+        best_fitness = best_penalized_fitness_history,
+        mean_fitness = mean_fitness,
+        median_fitness = median_fitness,
+        unique_subsets = unique_subsets,
+        mean_pairwise_hamming_distance = mean_hamming_distance,
+        global_best_fraction = global_best_fraction,
+    )
+end
+
+function swarm_best_path_plot_data(landscape::Landscape,
+                                   result;
+                                   iteration::Union{Nothing, Integer} = nothing)
+    best_index_history = getproperty(result, :best_index_history)
+    best_penalized_fitness_history = getproperty(result, :best_penalized_fitness_history)
+
+    if any(isnothing, (best_index_history, best_penalized_fitness_history))
+        isnothing(iteration) ||
+            throw(ArgumentError("Swarm history is missing. Run run_swarm_ea(...; keep_history=true) before plotting iteration-specific paths."))
+        return nothing
+    end
+
+    last_position = if isnothing(iteration)
+        length(best_index_history)
+    else
+        0 <= iteration <= length(best_index_history) - 1 ||
+            throw(ArgumentError("iteration must be between 0 and $(length(best_index_history) - 1)"))
+        iteration + 1
+    end
+
+    path_indices = best_index_history[1:last_position]
+    path_fitness = best_penalized_fitness_history[1:last_position]
+    path_feature_counts = count_ones.(path_indices)
+    feature_path_positions = compress_ea_path(path_feature_counts, path_fitness)
+    nodes = build_hbm(landscape; values=fitness_values(landscape))
+    node_lookup = Dict(node.index => node for node in nodes)
+    path_x = Float64[node_lookup[index].x for index in path_indices]
+    path_y = Float64[node_lookup[index].y for index in path_indices]
+    hbm_path_positions = compress_path_positions(path_x, path_y)
+
+    return (
+        indices = path_indices,
+        penalized_fitness = path_fitness,
+        feature_counts = path_feature_counts,
+        feature_path_positions = feature_path_positions,
+        hbm_x = path_x,
+        hbm_y = path_y,
+        hbm_path_positions = hbm_path_positions,
+    )
+end
+
+function plot_fitness_by_feature_count_with_swarm(landscape::Landscape,
+                                                  result;
+                                                  iteration::Union{Nothing, Integer} = nothing,
+                                                  values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                                  title::AbstractString = "$(landscape.name) Fitness by Feature Count with Swarm",
+                                                  fitness_label::AbstractString = "Penalized fitness",
+                                                  size::Tuple{Int, Int} = (1400, 900),
+                                                  dpi::Int = 200)
+    plt = plot_fitness_by_feature_count(
+        landscape;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+
+    snapshot = swarm_snapshot_plot_data(landscape, result; iteration=iteration)
+    path_data = swarm_best_path_plot_data(landscape, result; iteration=iteration)
+    particle_label = maximum(snapshot.multiplicity) > 1 ? "Particles (size = duplicates)" : "Particles"
+    particle_size = 5.0 .+ 3.0 .* sqrt.(Float64.(snapshot.multiplicity))
+    best_label = isnothing(iteration) ? "Swarm best" : "Best so far"
+
+    if !isnothing(path_data)
+        path_positions = path_data.feature_path_positions
+        path_counts = [path_data.feature_counts[i] for i in path_positions]
+        path_fitness = [path_data.penalized_fitness[i] for i in path_positions]
+
+        plot!(
+            plt,
+            path_counts,
+            path_fitness;
+            linewidth = 2.5,
+            color = :black,
+            alpha = 0.55,
+            label = "Best path",
+        )
+
+        scatter!(
+            plt,
+            path_counts,
+            path_fitness;
+            ms = 4.4,
+            markercolor = :black,
+            markeralpha = 0.42,
+            markerstrokewidth = 0,
+            label = "",
+        )
+
+        scatter!(
+            plt,
+            [path_counts[1]],
+            [path_fitness[1]];
+            ms = 8.0,
+            markershape = :diamond,
+            markercolor = :white,
+            markerstrokecolor = :black,
+            markerstrokewidth = 1.6,
+            label = "Path start",
+        )
+    end
+
+    scatter!(
+        plt,
+        snapshot.feature_counts,
+        snapshot.penalized_fitness;
+        ms = particle_size,
+        markershape = :circle,
+        markercolor = :black,
+        markeralpha = 0.55,
+        markerstrokecolor = :white,
+        markerstrokewidth = 0.6,
+        label = particle_label,
+    )
+
+    scatter!(
+        plt,
+        [count_ones(snapshot.best_index)],
+        [snapshot.best_penalized_fitness];
+        ms = 13.0,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.9,
+        label = best_label,
+    )
+
+    return plt
+end
+
+function save_fitness_by_feature_count_with_swarm_plot(landscape::Landscape,
+                                                       result,
+                                                       output_path::AbstractString;
+                                                       iteration::Union{Nothing, Integer} = nothing,
+                                                       values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                                       title::AbstractString = "$(landscape.name) Fitness by Feature Count with Swarm",
+                                                       fitness_label::AbstractString = "Penalized fitness",
+                                                       size::Tuple{Int, Int} = (1400, 900),
+                                                       dpi::Int = 200)
+    plt = plot_fitness_by_feature_count_with_swarm(
+        landscape,
+        result;
+        iteration=iteration,
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function plot_hbm_with_swarm(landscape::Landscape,
+                             result;
+                             iteration::Union{Nothing, Integer} = nothing,
+                             values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                             title::AbstractString = "$(landscape.name) HBM with Swarm",
+                             fitness_label::AbstractString = "Penalized fitness",
+                             max_local_optima::Int = 50,
+                             size::Tuple{Int, Int} = (2200, 1400),
+                             dpi::Int = 300)
+    nodes = build_hbm(landscape; values=values)
+    plot_data = hbm_plot_data(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
+    isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
+
+    node_lookup = Dict(node.index => node for node in nodes)
+    x_bits = ceil(Int, landscape.num_features / 2)
+    y_bits = fld(landscape.num_features, 2)
+    x_max = (1 << x_bits) - 1
+    y_max = (1 << y_bits) - 1
+    marker_sizes = hbm_marker_sizes(x_max + 1, y_max + 1)
+    x_ticks = ([0.0, Float64(x_max)], ["2^0 - 1", "2^$(x_bits) - 1"])
+    y_ticks = ([0.0, Float64(y_max)], ["2^0 - 1", "2^$(y_bits) - 1"])
+    local_only = top_local_optima(
+        nodes,
+        plot_data.local_optima,
+        plot_data.global_optima;
+        max_count = max_local_optima,
+    )
+    snapshot = swarm_snapshot_plot_data(landscape, result; iteration=iteration)
+    path_data = swarm_best_path_plot_data(landscape, result; iteration=iteration)
+    particle_nodes = [node_lookup[index] for index in snapshot.unique_indices]
+    particle_size = marker_sizes.base .+ 1.8 .* sqrt.(Float64.(snapshot.multiplicity))
+    best_label = isnothing(iteration) ? "Swarm best" : "Best so far"
+
+    base_plt = scatter(
+        plot_data.x,
+        plot_data.y;
+        marker_z = plot_data.fitness,
+        color = cgrad([:darkgreen, :ivory, :purple]),
+        ms = marker_sizes.base,
+        markerstrokewidth = 0,
+        xlabel = "First half of bitstring",
+        ylabel = "Second half of bitstring",
+        title = title,
+        label = "",
+        legend = false,
+        colorbar = :right,
+        colorbar_title = "",
+        colorbar_tickfontsize = 22,
+        aspect_ratio = :equal,
+        size = size,
+        dpi = dpi,
+        xticks = x_ticks,
+        yticks = y_ticks,
+        xlims = (-0.8, x_max + 0.8),
+        ylims = (-0.8, y_max + 0.8),
+        grid = true,
+        gridalpha = 0.18,
+        framestyle = :box,
+        background_color = :white,
+        tickfontsize = 24,
+        guidefontsize = 34,
+        titlefontsize = 54,
+        left_margin = 14Plots.mm,
+        right_margin = 12Plots.mm,
+        top_margin = 10Plots.mm,
+        bottom_margin = 18Plots.mm,
+    )
+
+    if !isempty(local_only)
+        local_nodes = [node_lookup[index] for index in local_only]
+        scatter!(
+            base_plt,
+            Float64[node.x for node in local_nodes],
+            Float64[node.y for node in local_nodes];
+            ms = marker_sizes.optimum,
+            markershape = :circle,
+            markercolor = :dodgerblue3,
+            markeralpha = 1.0,
+            markerstrokewidth = 0,
+            label = "",
+        )
+    end
+
+    if !isempty(plot_data.global_optima)
+        global_nodes = [node_lookup[index] for index in plot_data.global_optima]
+        scatter!(
+            base_plt,
+            Float64[node.x for node in global_nodes],
+            Float64[node.y for node in global_nodes];
+            ms = marker_sizes.optimum,
+            markershape = :circle,
+            markercolor = :red2,
+            markeralpha = 0.98,
+            markerstrokewidth = 0,
+            label = "",
+        )
+    end
+
+    if !isnothing(path_data)
+        path_positions = path_data.hbm_path_positions
+        path_x = [path_data.hbm_x[i] for i in path_positions]
+        path_y = [path_data.hbm_y[i] for i in path_positions]
+
+        plot!(
+            base_plt,
+            path_x,
+            path_y;
+            linewidth = 2.6,
+            color = :black,
+            alpha = 0.55,
+            label = "",
+        )
+
+        scatter!(
+            base_plt,
+            path_x,
+            path_y;
+            ms = marker_sizes.base + 1.5,
+            markercolor = :black,
+            markeralpha = 0.38,
+            markerstrokewidth = 0,
+            label = "",
+        )
+
+        scatter!(
+            base_plt,
+            [path_x[1]],
+            [path_y[1]];
+            ms = marker_sizes.optimum,
+            markershape = :diamond,
+            markercolor = :white,
+            markerstrokecolor = :black,
+            markerstrokewidth = 1.4,
+            label = "",
+        )
+    end
+
+    scatter!(
+        base_plt,
+        Float64[node.x for node in particle_nodes],
+        Float64[node.y for node in particle_nodes];
+        ms = particle_size,
+        markershape = :circle,
+        markercolor = :black,
+        markeralpha = 0.55,
+        markerstrokecolor = :white,
+        markerstrokewidth = 0.7,
+        label = "",
+    )
+
+    best_node = node_lookup[snapshot.best_index]
+    scatter!(
+        base_plt,
+        [Float64(best_node.x)],
+        [Float64(best_node.y)];
+        ms = marker_sizes.optimum + 5.0,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.9,
+        label = "",
+    )
+
+    info_plt = plot(
+        xlim = (0, 1),
+        ylim = (0, 1);
+        legend = :best,
+        legend_column = 2,
+        framestyle = :none,
+        grid = false,
+        showaxis = false,
+        ticks = nothing,
+        background_color = :white,
+        legend_background_color = :white,
+        legend_font_pointsize = 24,
+        left_margin = 0Plots.mm,
+        right_margin = 0Plots.mm,
+        top_margin = 0Plots.mm,
+        bottom_margin = 0Plots.mm,
+    )
+
+    scatter!(
+        info_plt,
+        [2.0],
+        [2.0];
+        ms = 26,
+        markershape = :circle,
+        markercolor = :dodgerblue3,
+        markerstrokewidth = 0,
+        label = "Local optimum",
+    )
+
+    scatter!(
+        info_plt,
+        [2.0],
+        [2.0];
+        ms = 26,
+        markershape = :circle,
+        markercolor = :red2,
+        markerstrokewidth = 0,
+        label = "Global optimum",
+    )
+
+    plot!(
+        info_plt,
+        [2.0, 2.1],
+        [2.0, 2.0];
+        linewidth = 3.0,
+        color = :black,
+        alpha = 0.55,
+        label = "Best path",
+    )
+
+    scatter!(
+        info_plt,
+        [2.0],
+        [2.0];
+        ms = 24,
+        markershape = :diamond,
+        markercolor = :white,
+        markerstrokecolor = :black,
+        markerstrokewidth = 1.4,
+        label = "Path start",
+    )
+
+    scatter!(
+        info_plt,
+        [2.0],
+        [2.0];
+        ms = 26,
+        markershape = :circle,
+        markercolor = :black,
+        markeralpha = 0.55,
+        markerstrokecolor = :white,
+        markerstrokewidth = 0.7,
+        label = maximum(snapshot.multiplicity) > 1 ? "Particles (size = duplicates)" : "Particles",
+    )
+
+    scatter!(
+        info_plt,
+        [2.0],
+        [2.0];
+        ms = 30,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.9,
+        label = best_label,
+    )
+
+    label_plt = plot(
+        xlim = (0, 1),
+        ylim = (0, 1);
+        framestyle = :none,
+        grid = false,
+        showaxis = false,
+        ticks = nothing,
+        background_color = :white,
+        left_margin = 0Plots.mm,
+        right_margin = 0Plots.mm,
+        top_margin = 0Plots.mm,
+        bottom_margin = 0Plots.mm,
+        annotations = [(0.5, 0.5, text(fitness_label, 30, :black, rotation = 90))],
+    )
+
+    lower_plt = plot(
+        base_plt,
+        label_plt;
+        layout = grid(1, 2, widths = [0.95, 0.05]),
+        background_color = :white,
+    )
+
+    return plot(
+        info_plt,
+        lower_plt;
+        layout = grid(2, 1, heights = [0.12, 0.88]),
+        size = size,
+        dpi = dpi,
+        background_color = :white,
+    )
+end
+
+function save_hbm_with_swarm_plot(landscape::Landscape,
+                                  result,
+                                  output_path::AbstractString;
+                                  iteration::Union{Nothing, Integer} = nothing,
+                                  values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                  title::AbstractString = "$(landscape.name) HBM with Swarm",
+                                  fitness_label::AbstractString = "Penalized fitness",
+                                  max_local_optima::Int = 50,
+                                  size::Tuple{Int, Int} = (2200, 1400),
+                                  dpi::Int = 300)
+    plt = plot_hbm_with_swarm(
+        landscape,
+        result;
+        iteration=iteration,
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function plot_swarm_trace(landscape::Landscape,
+                          result;
+                          title::AbstractString = "Swarm Trace",
+                          fitness_label::AbstractString = "Penalized fitness",
+                          size::Tuple{Int, Int} = (1400, 1000),
+                          dpi::Int = 200)
+    plot_data = swarm_trace_plot_data(landscape, result)
+
+    fitness_plt = plot(
+        plot_data.iterations,
+        plot_data.best_fitness;
+        linewidth = 3.0,
+        color = :darkorange3,
+        label = "Best",
+        ylabel = fitness_label,
+        title = title,
+        legend = :bottomright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+        titlefontsize = 16,
+    )
+
+    plot!(
+        fitness_plt,
+        plot_data.iterations,
+        plot_data.mean_fitness;
+        linewidth = 2.6,
+        color = :dodgerblue3,
+        label = "Mean",
+    )
+
+    plot!(
+        fitness_plt,
+        plot_data.iterations,
+        plot_data.median_fitness;
+        linewidth = 2.4,
+        linestyle = :dash,
+        color = :purple3,
+        label = "Median",
+    )
+
+    diversity_plt = plot(
+        plot_data.iterations,
+        plot_data.unique_subsets;
+        linewidth = 2.7,
+        color = :darkgreen,
+        label = "Unique subsets",
+        ylabel = "Diversity",
+        legend = :topright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    plot!(
+        diversity_plt,
+        plot_data.iterations,
+        plot_data.mean_pairwise_hamming_distance;
+        linewidth = 2.5,
+        color = :firebrick3,
+        label = "Mean Hamming distance",
+    )
+
+    collapse_plt = plot(
+        plot_data.iterations,
+        plot_data.global_best_fraction;
+        linewidth = 2.7,
+        color = :black,
+        label = "Particles at global best",
+        xlabel = "Iteration",
+        ylabel = "Best fraction",
+        legend = :bottomright,
+        ylims = (-0.02, 1.02),
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    return plot(
+        fitness_plt,
+        diversity_plt,
+        collapse_plt;
+        layout = grid(3, 1, heights = [0.42, 0.32, 0.26]),
+        size = size,
+        dpi = dpi,
+        background_color = :white,
+        link = :x,
+    )
+end
+
+function save_swarm_trace_plot(landscape::Landscape,
+                               result,
+                               output_path::AbstractString;
+                               title::AbstractString = "Swarm Trace",
+                               fitness_label::AbstractString = "Penalized fitness",
+                               size::Tuple{Int, Int} = (1400, 1000),
+                               dpi::Int = 200)
+    plt = plot_swarm_trace(
+        landscape,
+        result;
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function save_fitness_by_feature_count_swarm_animation(landscape::Landscape,
+                                                       result,
+                                                       output_path::AbstractString;
+                                                       values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                                       title_prefix::AbstractString = "$(landscape.name) Fitness by Feature Count with Swarm",
+                                                       fitness_label::AbstractString = "Penalized fitness",
+                                                       fps::Int = 10,
+                                                       size::Tuple{Int, Int} = (1400, 900),
+                                                       dpi::Int = 200)
+    plot_data = swarm_trace_plot_data(landscape, result)
+    anim = Plots.Animation()
+
+    for (position, iteration) in pairs(plot_data.iterations)
+        frame_title = "$(title_prefix) (iteration=$(iteration), unique=$(plot_data.unique_subsets[position]))"
+        plt = plot_fitness_by_feature_count_with_swarm(
+            landscape,
+            result;
+            iteration=iteration,
+            values=values,
+            title=frame_title,
+            fitness_label=fitness_label,
+            size=size,
+            dpi=dpi,
+        )
+        Plots.frame(anim, plt)
+    end
+
+    mkpath(dirname(output_path))
+    Plots.gif(anim, output_path; fps=fps)
+    return output_path
+end
+
+function save_hbm_swarm_animation(landscape::Landscape,
+                                  result,
+                                  output_path::AbstractString;
+                                  values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                  title_prefix::AbstractString = "$(landscape.name) HBM with Swarm",
+                                  fitness_label::AbstractString = "Penalized fitness",
+                                  max_local_optima::Int = 50,
+                                  fps::Int = 10,
+                                  size::Tuple{Int, Int} = (2200, 1400),
+                                  dpi::Int = 300)
+    plot_data = swarm_trace_plot_data(landscape, result)
+    anim = Plots.Animation()
+
+    for (position, iteration) in pairs(plot_data.iterations)
+        frame_title = "$(title_prefix) (iteration=$(iteration), unique=$(plot_data.unique_subsets[position]))"
+        plt = plot_hbm_with_swarm(
+            landscape,
+            result;
+            iteration=iteration,
+            values=values,
+            title=frame_title,
+            fitness_label=fitness_label,
+            max_local_optima=max_local_optima,
+            size=size,
+            dpi=dpi,
+        )
+        Plots.frame(anim, plt)
+    end
+
+    mkpath(dirname(output_path))
+    Plots.gif(anim, output_path; fps=fps)
     return output_path
 end

@@ -4,7 +4,9 @@ include("datasets.jl")
 include("types.jl")
 include("parser.jl")
 include("landscape.jl")
-include("ea.jl")
+include("general_ga.jl")
+include("feature_main.jl")
+include("swarm_evolp.jl")
 include("triangle.jl")
 include("hbm.jl")
 include("visualization.jl")
@@ -24,8 +26,9 @@ export DATASETS,
        fitness,
        penalty,
        penalized_fitness,
-       standard_bit_mutation,
-       run_standard_ea,
+       run_single_objective_ea,
+       decode_swarm_position,
+       run_swarm_ea,
        triangle_fitness,
        triangle_landscape,
        HBMNode,
@@ -43,6 +46,15 @@ export DATASETS,
        save_fitness_by_feature_count_with_ea_plot,
        ea_trace_plot_data,
        plot_ea_trace,
-       save_ea_trace_plot
+       save_ea_trace_plot,
+       swarm_trace_plot_data,
+       plot_swarm_trace,
+       save_swarm_trace_plot,
+       plot_fitness_by_feature_count_with_swarm,
+       save_fitness_by_feature_count_with_swarm_plot,
+       plot_hbm_with_swarm,
+       save_hbm_with_swarm_plot,
+       save_fitness_by_feature_count_swarm_animation,
+       save_hbm_swarm_animation
 
 end # module IT3708Project3
