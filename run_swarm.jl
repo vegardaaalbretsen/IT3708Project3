@@ -3,9 +3,9 @@ using Random
 
 function usage()
     println("Usage: julia --project=. run_swarm.jl <dataset-key|triangle> [iterations] [epsilon] [seed] [swarm-size] [w] [c1] [c2] [plot-kind] [output-path]")
-    println("       julia --project=. run_swarm.jl <dataset-key|triangle> [iterations] [epsilon] [--seed N] [--swarm-size N] [--w V] [--c1 V] [--c2 V] [--plot none|trace|feature-count|hbm|all] [--output path]")
+    println("       julia --project=. run_swarm.jl <dataset-key|triangle> [iterations] [epsilon] [--seed N] [--swarm-size N] [--w V] [--c1 V] [--c2 V] [--plot none|trace|feature-count|hbm|stn|all] [--output path]")
     println("")
-    println("Plot kinds: none, trace, feature-count, hbm, all")
+    println("Plot kinds: none, trace, feature-count, hbm, stn, all")
     println("")
     println("Examples:")
     println("  julia --project=. run_swarm.jl breast-w")
@@ -15,6 +15,7 @@ function usage()
     println("  julia --project=. run_swarm.jl breast-w 500 0.01 --plot feature-count --seed 42")
     println("  julia --project=. run_swarm.jl breast-w 500 0.01 --plot trace --seed 42")
     println("  julia --project=. run_swarm.jl triangle 300 0.0 --plot hbm --seed 42")
+    println("  julia --project=. run_swarm.jl triangle 300 0.0 --plot stn --seed 42")
 end
 
 function parse_cli(args::Vector{String})
@@ -102,11 +103,11 @@ function parse_cli(args::Vector{String})
     end
 
     plot_kind = isnothing(plot_kind) ? "none" : plot_kind
-    plot_kind in ("none", "trace", "feature-count", "hbm", "all") ||
-        error("plot-kind must be one of: none, trace, feature-count, hbm, all")
+    plot_kind in ("none", "trace", "feature-count", "hbm", "stn", "all") ||
+        error("plot-kind must be one of: none, trace, feature-count, hbm, stn, all")
 
     if plot_kind == "all" && !isnothing(output_path)
-        error("--output can only be used with plot kinds 'trace', 'feature-count', or 'hbm'")
+        error("--output can only be used with plot kinds 'trace', 'feature-count', 'hbm', or 'stn'")
     end
 
     return (
@@ -124,30 +125,43 @@ function parse_cli(args::Vector{String})
 end
 
 function default_swarm_trace_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
     if epsilon == 0
-        return "$(dataset_key)_swarm_trace"
+        return "$(prefix)_swarm_trace"
     end
 
     epsilon_tag = replace(string(epsilon), "." => "p")
-    return "$(dataset_key)_swarm_trace_e$(epsilon_tag)"
+    return "$(prefix)_swarm_trace_e$(epsilon_tag)"
 end
 
 function default_swarm_feature_count_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
     if epsilon == 0
-        return "$(dataset_key)_swarm_feature_count"
+        return "$(prefix)_swarm_feature_count"
     end
 
     epsilon_tag = replace(string(epsilon), "." => "p")
-    return "$(dataset_key)_swarm_feature_count_e$(epsilon_tag)"
+    return "$(prefix)_swarm_feature_count_e$(epsilon_tag)"
 end
 
 function default_swarm_hbm_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
     if epsilon == 0
-        return "$(dataset_key)_swarm"
+        return "$(prefix)_swarm"
     end
 
     epsilon_tag = replace(string(epsilon), "." => "p")
-    return "$(dataset_key)_swarm_e$(epsilon_tag)"
+    return "$(prefix)_swarm_e$(epsilon_tag)"
+end
+
+function default_swarm_stn_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
+    if epsilon == 0
+        return "$(prefix)_swarm_stn"
+    end
+
+    epsilon_tag = replace(string(epsilon), "." => "p")
+    return "$(prefix)_swarm_stn_e$(epsilon_tag)"
 end
 
 if any(arg -> arg in ("-h", "--help"), ARGS)
@@ -159,6 +173,7 @@ cli = parse_cli(ARGS)
 rng = isnothing(cli.seed) ? Random.default_rng() : MersenneTwister(cli.seed)
 
 landscape = load_landscape_key(cli.dataset_key)
+metadata = dataset_plot_metadata(cli.dataset_key)
 result = run_swarm_ea(
     landscape;
     iterations=cli.iterations,
@@ -171,7 +186,7 @@ result = run_swarm_ea(
     rng=rng,
 )
 
-println("Swarm EA on `$(landscape.name)`")
+println("Swarm EA on `$(metadata.label)`")
 println("Iterations: $(result.iterations)")
 println("Swarm size: $(result.swarm_size)")
 println("Epsilon: $(result.epsilon)")
@@ -188,10 +203,10 @@ if cli.plot_kind in ("trace", "all")
     trace_output = if cli.plot_kind == "trace" && !isnothing(cli.output_path)
         cli.output_path
     else
-        default_ea_plot_path(default_swarm_trace_plot_name(cli.dataset_key, cli.epsilon))
+        default_ea_plot_path(default_swarm_trace_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
     end
 
-    trace_title = "$(landscape.name) swarm trace"
+    trace_title = "$(metadata.label) swarm trace"
     if cli.epsilon != 0
         trace_title *= " (epsilon=$(cli.epsilon))"
     end
@@ -203,17 +218,17 @@ if cli.plot_kind in ("trace", "all")
         title=trace_title,
         fitness_label=fitness_label,
     )
-    println("Saved swarm trace plot for `$(landscape.name)` to `$saved_path`.")
+    println("Saved swarm trace plot for `$(metadata.label)` to `$saved_path`.")
 end
 
 if cli.plot_kind in ("feature-count", "all")
     feature_count_output = if cli.plot_kind == "feature-count" && !isnothing(cli.output_path)
         cli.output_path
     else
-        default_ea_plot_path(default_swarm_feature_count_plot_name(cli.dataset_key, cli.epsilon))
+        default_ea_plot_path(default_swarm_feature_count_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
     end
 
-    feature_count_title = "$(landscape.name) fitness by feature count with swarm"
+    feature_count_title = "$(metadata.label) fitness by feature count with swarm"
     if cli.epsilon != 0
         feature_count_title *= " (epsilon=$(cli.epsilon))"
     end
@@ -226,17 +241,17 @@ if cli.plot_kind in ("feature-count", "all")
         title=feature_count_title,
         fitness_label=fitness_label,
     )
-    println("Saved swarm feature-count plot for `$(landscape.name)` to `$saved_path`.")
+    println("Saved swarm feature-count plot for `$(metadata.label)` to `$saved_path`.")
 end
 
 if cli.plot_kind in ("hbm", "all")
     hbm_output = if cli.plot_kind == "hbm" && !isnothing(cli.output_path)
         cli.output_path
     else
-        default_hbm_plot_path(default_swarm_hbm_plot_name(cli.dataset_key, cli.epsilon))
+        default_hbm_plot_path(default_swarm_hbm_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
     end
 
-    hbm_title = "$(landscape.name) HBM with swarm"
+    hbm_title = "$(metadata.label) HBM with swarm"
     if cli.epsilon != 0
         hbm_title *= " (epsilon=$(cli.epsilon))"
     end
@@ -249,5 +264,28 @@ if cli.plot_kind in ("hbm", "all")
         title=hbm_title,
         fitness_label=fitness_label,
     )
-    println("Saved swarm HBM plot for `$(landscape.name)` to `$saved_path`.")
+    println("Saved swarm HBM plot for `$(metadata.label)` to `$saved_path`.")
+end
+
+if cli.plot_kind in ("stn", "all")
+    stn_output = if cli.plot_kind == "stn" && !isnothing(cli.output_path)
+        cli.output_path
+    else
+        default_stn_plot_path(default_swarm_stn_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
+    end
+
+    stn_title = "$(metadata.label) swarm search trajectory network"
+    if cli.epsilon != 0
+        stn_title *= " (epsilon=$(cli.epsilon))"
+    end
+
+    saved_path = save_swarm_search_trajectory_network_plot(
+        landscape,
+        result,
+        stn_output;
+        values=values,
+        title=stn_title,
+        fitness_label=fitness_label,
+    )
+    println("Saved swarm search trajectory network for `$(metadata.label)` to `$saved_path`.")
 end

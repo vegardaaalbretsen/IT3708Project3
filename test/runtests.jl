@@ -47,6 +47,22 @@ end
     @test isapprox(IT3708Project3.penalty(3, 0.1), 0.3; atol=1e-12)
     @test isapprox(IT3708Project3.penalized_fitness(0.8, 3, 0.1), 0.5; atol=1e-12)
     @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.1)[1], landscape.accuracy[1] - 0.1; atol=1e-12)
+
+    metadata = dataset_plot_metadata("breast-w")
+    @test metadata.dataset == "breast-w"
+    @test metadata.model == "lr"
+    @test metadata.variant == "F"
+    @test metadata.slug == "breast-w_lr_F"
+    @test occursin("model=lr", metadata.label)
+
+    hbm_path = default_hbm_plot_path("breast-w_lr_F_penalized_e0p1"; dataset_key="breast-w")
+    @test occursin(joinpath("hbm", "breast-w", "lr", "F"), hbm_path)
+    @test endswith(hbm_path, "breast-w_lr_F_penalized_e0p1_hbm.png")
+
+    triangle_metadata = dataset_plot_metadata("triangle")
+    @test triangle_metadata.model == "synthetic"
+    @test triangle_metadata.variant === nothing
+    @test occursin(joinpath("ea", "triangle", "synthetic"), default_ea_plot_path("triangle_synthetic_ea_trace"; dataset_key="triangle"))
 end
 
 @testset "Triangle landscape" begin
@@ -183,6 +199,12 @@ end
     @test isfile(overlay_png)
     @test filesize(overlay_png) > 0
 
+    stn_png = tempname() * ".png"
+    stn_path = save_search_trajectory_network_plot(tiny, result, stn_png; title="GA STN Test", size=(1000, 700), dpi=120)
+    @test stn_path == stn_png
+    @test isfile(stn_png)
+    @test filesize(stn_png) > 0
+
     no_history = run_single_objective_ea(
         tiny;
         iterations=8,
@@ -207,6 +229,7 @@ end
     @test no_history.max_history === nothing
     @test no_history.min_history === nothing
     @test no_history.entropy_history === nothing
+    @test_throws ArgumentError plot_search_trajectory_network(tiny, no_history)
 
     direct_params = IT3708Project3.GACore.GAParams(
         popsize=3,
@@ -355,6 +378,18 @@ end
     @test isfile(trace_png)
     @test filesize(trace_png) > 0
 
+    stn_png = tempname() * ".png"
+    stn_path = save_swarm_search_trajectory_network_plot(
+        tiny,
+        result,
+        stn_png;
+        size=(1000, 700),
+        dpi=120,
+    )
+    @test stn_path == stn_png
+    @test isfile(stn_png)
+    @test filesize(stn_png) > 0
+
     gif_path = tempname() * ".gif"
     saved_gif = save_fitness_by_feature_count_swarm_animation(
         tiny,
@@ -378,4 +413,5 @@ end
     )
     @test_throws ArgumentError swarm_trace_plot_data(tiny, no_history)
     @test isnothing(IT3708Project3.swarm_best_path_plot_data(tiny, no_history))
+    @test_throws ArgumentError plot_swarm_search_trajectory_network(tiny, no_history)
 end

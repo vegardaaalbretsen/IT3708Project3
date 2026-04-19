@@ -546,6 +546,311 @@ function compress_path_positions(x_values::AbstractVector,
     return positions
 end
 
+function trajectory_network_paths(result)
+    current_index_history = getproperty(result, :current_index_history)
+    isnothing(current_index_history) &&
+        throw(ArgumentError("EA history is missing. Run run_single_objective_ea(...; keep_history=true) before plotting the search trajectory network."))
+
+    return [current_index_history]
+end
+
+function swarm_trajectory_network_paths(result)
+    particle_index_history = getproperty(result, :particle_index_history)
+    isnothing(particle_index_history) &&
+        throw(ArgumentError("Swarm history is missing. Run run_swarm_ea(...; keep_history=true) before plotting the search trajectory network."))
+    isempty(particle_index_history) && return Vector{Vector{Int}}()
+
+    swarm_size = length(first(particle_index_history))
+    return [
+        [snapshot[i] for snapshot in particle_index_history]
+        for i in 1:swarm_size
+    ]
+end
+
+function trajectory_network_plot_data(landscape::Landscape,
+                                      paths::AbstractVector{<:AbstractVector{<:Integer}};
+                                      values = fitness_values(landscape))
+    isempty(paths) && throw(ArgumentError("paths must not be empty"))
+
+    nodes = build_hbm(landscape; values=values)
+    node_lookup = Dict(node.index => node for node in nodes)
+    visit_counts = Dict{Int, Int}()
+    start_counts = Dict{Int, Int}()
+    end_counts = Dict{Int, Int}()
+    edge_counts = Dict{Tuple{Int, Int}, Int}()
+
+    for path in paths
+        isempty(path) && continue
+        first_index = Int(first(path))
+        last_index = Int(last(path))
+        start_counts[first_index] = get(start_counts, first_index, 0) + 1
+        end_counts[last_index] = get(end_counts, last_index, 0) + 1
+
+        for index in path
+            index = Int(index)
+            visit_counts[index] = get(visit_counts, index, 0) + 1
+        end
+
+        for i in 2:length(path)
+            from = Int(path[i - 1])
+            to = Int(path[i])
+            from == to && continue
+            edge = from < to ? (from, to) : (to, from)
+            edge_counts[edge] = get(edge_counts, edge, 0) + 1
+        end
+    end
+
+    visited_indices = sort!(collect(keys(visit_counts)); by = index -> (-visit_counts[index], index))
+    start_indices = sort!(collect(keys(start_counts)); by = index -> (-start_counts[index], index))
+    end_indices = sort!(collect(keys(end_counts)); by = index -> (-end_counts[index], index))
+
+    return (
+        nodes = nodes,
+        node_lookup = node_lookup,
+        visited_indices = visited_indices,
+        visit_counts = visit_counts,
+        start_indices = start_indices,
+        start_counts = start_counts,
+        end_indices = end_indices,
+        end_counts = end_counts,
+        edge_counts = edge_counts,
+    )
+end
+
+function plot_trajectory_network(landscape::Landscape,
+                                 network_data;
+                                 best_index::Integer,
+                                 title::AbstractString,
+                                 fitness_label::AbstractString,
+                                 visited_label::AbstractString,
+                                 start_label::AbstractString,
+                                 end_label::AbstractString,
+                                 best_label::AbstractString,
+                                 max_local_optima::Int = 50,
+                                 size::Tuple{Int, Int} = (2200, 1400),
+                                 dpi::Int = 300)
+    nodes = network_data.nodes
+    node_lookup = network_data.node_lookup
+    plot_data = hbm_plot_data(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
+    isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
+
+    x_bits = ceil(Int, landscape.num_features / 2)
+    y_bits = fld(landscape.num_features, 2)
+    x_max = (1 << x_bits) - 1
+    y_max = (1 << y_bits) - 1
+    marker_sizes = hbm_marker_sizes(x_max + 1, y_max + 1)
+    x_ticks = ([0.0, Float64(x_max)], ["2^0 - 1", "2^$(x_bits) - 1"])
+    y_ticks = ([0.0, Float64(y_max)], ["2^0 - 1", "2^$(y_bits) - 1"])
+    local_only = top_local_optima(
+        nodes,
+        plot_data.local_optima,
+        plot_data.global_optima;
+        max_count = max_local_optima,
+    )
+
+    plt = scatter(
+        plot_data.x,
+        plot_data.y;
+        marker_z = plot_data.fitness,
+        color = cgrad([:darkgreen, :ivory, :purple]),
+        ms = marker_sizes.base,
+        markeralpha = 0.32,
+        markerstrokewidth = 0,
+        xlabel = "First half of bitstring",
+        ylabel = "Second half of bitstring",
+        title = title,
+        label = "Landscape",
+        legend = :outertopright,
+        colorbar = :right,
+        colorbar_title = "",
+        colorbar_tickfontsize = 18,
+        aspect_ratio = :equal,
+        size = size,
+        dpi = dpi,
+        xticks = x_ticks,
+        yticks = y_ticks,
+        xlims = (-0.8, x_max + 0.8),
+        ylims = (-0.8, y_max + 0.8),
+        grid = true,
+        gridalpha = 0.18,
+        framestyle = :box,
+        background_color = :white,
+        tickfontsize = 18,
+        guidefontsize = 24,
+        titlefontsize = 28,
+    )
+
+    if !isempty(local_only)
+        local_nodes = [node_lookup[index] for index in local_only]
+        scatter!(
+            plt,
+            Float64[node.x for node in local_nodes],
+            Float64[node.y for node in local_nodes];
+            ms = marker_sizes.optimum,
+            markershape = :circle,
+            markercolor = :dodgerblue3,
+            markerstrokewidth = 0,
+            label = "Local optimum",
+        )
+    end
+
+    if !isempty(plot_data.global_optima)
+        global_nodes = [node_lookup[index] for index in plot_data.global_optima]
+        scatter!(
+            plt,
+            Float64[node.x for node in global_nodes],
+            Float64[node.y for node in global_nodes];
+            ms = marker_sizes.optimum,
+            markershape = :circle,
+            markercolor = :red2,
+            markerstrokewidth = 0,
+            label = "Global optimum",
+        )
+    end
+
+    if !isempty(network_data.edge_counts)
+        max_edge_count = maximum(values(network_data.edge_counts))
+        for ((from, to), count) in sort!(collect(network_data.edge_counts); by = last)
+            from_node = node_lookup[from]
+            to_node = node_lookup[to]
+            edge_strength = count / max_edge_count
+            plot!(
+                plt,
+                [Float64(from_node.x), Float64(to_node.x)],
+                [Float64(from_node.y), Float64(to_node.y)];
+                linewidth = 1.0 + 5.0 * sqrt(edge_strength),
+                color = :black,
+                alpha = 0.14 + 0.56 * edge_strength,
+                label = "",
+            )
+        end
+    end
+
+    if !isempty(network_data.visited_indices)
+        max_visit_count = maximum(values(network_data.visit_counts))
+        visited_nodes = [node_lookup[index] for index in network_data.visited_indices]
+        visited_sizes = [
+            marker_sizes.base + 0.95 * sqrt(network_data.visit_counts[index] / max_visit_count) * marker_sizes.optimum
+            for index in network_data.visited_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in visited_nodes],
+            Float64[node.y for node in visited_nodes];
+            ms = visited_sizes,
+            marker_z = Float64[node.fitness for node in visited_nodes],
+            color = cgrad([:darkgreen, :ivory, :purple]),
+            markerstrokecolor = :black,
+            markerstrokewidth = 0.5,
+            label = visited_label,
+        )
+    end
+
+    if !isempty(network_data.start_indices)
+        max_start_count = maximum(values(network_data.start_counts))
+        start_nodes = [node_lookup[index] for index in network_data.start_indices]
+        start_sizes = [
+            marker_sizes.optimum + 0.7 * sqrt(network_data.start_counts[index] / max_start_count) * marker_sizes.base
+            for index in network_data.start_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in start_nodes],
+            Float64[node.y for node in start_nodes];
+            ms = start_sizes,
+            markershape = :diamond,
+            markercolor = :white,
+            markerstrokecolor = :black,
+            markerstrokewidth = 1.4,
+            label = start_label,
+        )
+    end
+
+    if !isempty(network_data.end_indices)
+        max_end_count = maximum(values(network_data.end_counts))
+        end_nodes = [node_lookup[index] for index in network_data.end_indices]
+        end_sizes = [
+            marker_sizes.optimum + 0.7 * sqrt(network_data.end_counts[index] / max_end_count) * marker_sizes.base
+            for index in network_data.end_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in end_nodes],
+            Float64[node.y for node in end_nodes];
+            ms = end_sizes,
+            markershape = :utriangle,
+            markercolor = :forestgreen,
+            markerstrokewidth = 0,
+            label = end_label,
+        )
+    end
+
+    best_node = node_lookup[Int(best_index)]
+    scatter!(
+        plt,
+        [Float64(best_node.x)],
+        [Float64(best_node.y)];
+        ms = marker_sizes.optimum + 6.0,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.9,
+        label = best_label,
+    )
+
+    annotate!(plt, x_max + 1.05, y_max / 2, text(fitness_label, 14, :black, rotation = 90))
+    return plt
+end
+
+function plot_search_trajectory_network(landscape::Landscape,
+                                        result;
+                                        values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                        title::AbstractString = "$(landscape.name) Search Trajectory Network",
+                                        fitness_label::AbstractString = "Penalized fitness",
+                                        max_local_optima::Int = 50,
+                                        size::Tuple{Int, Int} = (2200, 1400),
+                                        dpi::Int = 300)
+    network_data = trajectory_network_plot_data(landscape, trajectory_network_paths(result); values=values)
+    return plot_trajectory_network(
+        landscape,
+        network_data;
+        best_index=getproperty(result, :best_index),
+        title=title,
+        fitness_label=fitness_label,
+        visited_label="Visited states",
+        start_label="GA start",
+        end_label="GA end",
+        best_label="GA best",
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+end
+
+function save_search_trajectory_network_plot(landscape::Landscape,
+                                             result,
+                                             output_path::AbstractString;
+                                             values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                             title::AbstractString = "$(landscape.name) Search Trajectory Network",
+                                             fitness_label::AbstractString = "Penalized fitness",
+                                             max_local_optima::Int = 50,
+                                             size::Tuple{Int, Int} = (2200, 1400),
+                                             dpi::Int = 300)
+    plt = plot_search_trajectory_network(
+        landscape,
+        result;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
 function plot_fitness_by_feature_count_with_ea(landscape::Landscape,
                                                result;
                                                values = fitness_values(landscape),
@@ -798,6 +1103,55 @@ function swarm_best_path_plot_data(landscape::Landscape,
         hbm_y = path_y,
         hbm_path_positions = hbm_path_positions,
     )
+end
+
+function plot_swarm_search_trajectory_network(landscape::Landscape,
+                                              result;
+                                              values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                              title::AbstractString = "$(landscape.name) Swarm Search Trajectory Network",
+                                              fitness_label::AbstractString = "Penalized fitness",
+                                              max_local_optima::Int = 50,
+                                              size::Tuple{Int, Int} = (2200, 1400),
+                                              dpi::Int = 300)
+    network_data = trajectory_network_plot_data(landscape, swarm_trajectory_network_paths(result); values=values)
+    return plot_trajectory_network(
+        landscape,
+        network_data;
+        best_index=getproperty(result, :best_index),
+        title=title,
+        fitness_label=fitness_label,
+        visited_label="Visited subsets",
+        start_label="Initial swarm",
+        end_label="Final swarm",
+        best_label="Swarm best",
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+end
+
+function save_swarm_search_trajectory_network_plot(landscape::Landscape,
+                                                   result,
+                                                   output_path::AbstractString;
+                                                   values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                                   title::AbstractString = "$(landscape.name) Swarm Search Trajectory Network",
+                                                   fitness_label::AbstractString = "Penalized fitness",
+                                                   max_local_optima::Int = 50,
+                                                   size::Tuple{Int, Int} = (2200, 1400),
+                                                   dpi::Int = 300)
+    plt = plot_swarm_search_trajectory_network(
+        landscape,
+        result;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
 end
 
 function plot_fitness_by_feature_count_with_swarm(landscape::Landscape,

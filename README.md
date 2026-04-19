@@ -57,8 +57,53 @@ julia --project=. run_ea.jl breast-w 10000 0.01
 julia --project=. run_ea.jl triangle 5000 0.0 42 0
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42
+julia --project=. run_ea.jl breast-w 10000 0.01 --plot stn --seed 42
 julia --project=. run_ea.jl triangle 5000 0.1 --plot both --seed 42 --initial-index 0
+julia --project=. run_ea.jl triangle 5000 0.1 --plot all --seed 42 --initial-index 0
 julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2
+```
+
+`run_ea.jl` supports:
+
+- `--plot none|trace|feature-count|both`
+- `--plot none|trace|feature-count|stn|both|all`
+- `--popsize N`
+- `--pc V`
+- `--pm V`
+- `--tournament-size N`
+- `--survivor-mode elitist|generational`
+- `--elite N`
+
+The GA runner uses `run_single_objective_ea(...)`, implemented in `src/feature_main.jl` on top of the reusable core in `src/general_ga.jl`.
+
+Default plot outputs are organized by plot family, dataset, model, and variant when available. For example, `breast-w` plots are written under paths like `exports/plots/ea/breast-w/lr/F/...`, `exports/plots/hbm/breast-w/lr/F/...`, and `exports/plots/stn/breast-w/lr/F/...`.
+
+If you call the API directly, `keep_history=false` avoids storing per-generation traces, while `keep_history=true` enables trace and feature-count path plots.
+
+Example:
+
+```julia
+using IT3708Project3
+using Random
+
+landscape = load_landscape_key("breast-w")
+result = run_single_objective_ea(
+    landscape;
+    iterations=500,
+    epsilon=0.01,
+    population_size=150,
+    crossover_probability=0.9,
+    mutation_probability=0.02,
+    tournament_size=5,
+    survivor_mode=:generational,
+    elite=2,
+    rng=MersenneTwister(42),
+    keep_history=true,
+)
+
+save_ea_trace_plot(result, "exports/plots/ea/breast-w/lr/F/breast-w_lr_F_ga_trace.png")
+save_fitness_by_feature_count_with_ea_plot(landscape, result, "exports/plots/ea/breast-w/lr/F/breast-w_lr_F_ga_feature_count.png")
+save_search_trajectory_network_plot(landscape, result, "exports/plots/stn/breast-w/lr/F/breast-w_lr_F_ga_stn.png")
 ```
 
 Run the swarm EA on a landscape:
@@ -71,10 +116,11 @@ julia --project=. run_swarm.jl breast-w 500 0.01 --swarm-size 50 --w 0.7 --c1 1.
 julia --project=. run_swarm.jl breast-w 500 0.01 --plot feature-count --seed 42
 julia --project=. run_swarm.jl breast-w 500 0.01 --plot trace --seed 42
 julia --project=. run_swarm.jl triangle 300 0.0 --plot hbm --seed 42
+julia --project=. run_swarm.jl triangle 300 0.0 --plot stn --seed 42
 julia --project=. run_swarm.jl triangle 300 0.0 --plot all --seed 42
 ```
 
-`run_swarm.jl` supports `--plot none|trace|feature-count|hbm|all`. The trace plot automatically enables swarm history collection.
+`run_swarm.jl` supports `--plot none|trace|feature-count|hbm|stn|all`. The trace, HBM, feature-count, and STN plots automatically enable swarm history collection.
 
 ## Swarm Visualizations
 
@@ -84,6 +130,7 @@ Available swarm visualization helpers:
 
 - `plot_fitness_by_feature_count_with_swarm` and `save_fitness_by_feature_count_with_swarm_plot`
 - `plot_hbm_with_swarm` and `save_hbm_with_swarm_plot`
+- `plot_swarm_search_trajectory_network` and `save_swarm_search_trajectory_network_plot`
 - `plot_swarm_trace` and `save_swarm_trace_plot`
 - `save_fitness_by_feature_count_swarm_animation`
 - `save_hbm_swarm_animation`
@@ -106,11 +153,12 @@ result = run_swarm_ea(
     keep_history=true,
 )
 
-save_fitness_by_feature_count_with_swarm_plot(landscape, result, "exports/plots/ea/breast-w_swarm_feature_count.png")
-save_hbm_with_swarm_plot(landscape, result, "exports/plots/hbm/breast-w_swarm_hbm.png")
-save_swarm_trace_plot(landscape, result, "exports/plots/ea/breast-w_swarm_trace.png")
-save_fitness_by_feature_count_swarm_animation(landscape, result, "exports/plots/ea/breast-w_swarm_feature_count.gif")
-save_hbm_swarm_animation(landscape, result, "exports/plots/hbm/breast-w_swarm_hbm.gif")
+save_fitness_by_feature_count_with_swarm_plot(landscape, result, "exports/plots/ea/breast-w/lr/F/breast-w_lr_F_swarm_feature_count.png")
+save_hbm_with_swarm_plot(landscape, result, "exports/plots/hbm/breast-w/lr/F/breast-w_lr_F_swarm_hbm.png")
+save_swarm_search_trajectory_network_plot(landscape, result, "exports/plots/stn/breast-w/lr/F/breast-w_lr_F_swarm_stn.png")
+save_swarm_trace_plot(landscape, result, "exports/plots/ea/breast-w/lr/F/breast-w_lr_F_swarm_trace.png")
+save_fitness_by_feature_count_swarm_animation(landscape, result, "exports/plots/ea/breast-w/lr/F/breast-w_lr_F_swarm_feature_count.gif")
+save_hbm_swarm_animation(landscape, result, "exports/plots/hbm/breast-w/lr/F/breast-w_lr_F_swarm_hbm.gif")
 ```
 
 The swarm trace plot includes:

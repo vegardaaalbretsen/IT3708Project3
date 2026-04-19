@@ -3,9 +3,9 @@ using Random
 
 function usage()
     println("Usage: julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
-    println("       julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|both] [--output path]")
+    println("       julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|stn|both|all] [--output path]")
     println("")
-    println("Plot kinds: none, trace, feature-count, both")
+    println("Plot kinds: none, trace, feature-count, stn, both, all")
     println("")
     println("Examples:")
     println("  julia --project=. run_ea.jl breast-w")
@@ -13,7 +13,9 @@ function usage()
     println("  julia --project=. run_ea.jl triangle 5000 0.0 42 0")
     println("  julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42")
     println("  julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42")
+    println("  julia --project=. run_ea.jl breast-w 10000 0.01 --plot stn --seed 42")
     println("  julia --project=. run_ea.jl triangle 5000 0.1 --plot both --seed 42 --initial-index 0")
+    println("  julia --project=. run_ea.jl triangle 5000 0.1 --plot all --seed 42 --initial-index 0")
     println("  julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2")
 end
 
@@ -105,16 +107,16 @@ function parse_cli(args::Vector{String})
     end
 
     plot_kind = isnothing(plot_kind) ? "none" : plot_kind
-    plot_kind in ("none", "trace", "feature-count", "both") ||
-        error("plot-kind must be one of: none, trace, feature-count, both")
+    plot_kind in ("none", "trace", "feature-count", "stn", "both", "all") ||
+        error("plot-kind must be one of: none, trace, feature-count, stn, both, all")
 
     if !isnothing(survivor_mode)
         survivor_mode in (:elitist, :generational) ||
             error("survivor-mode must be one of: elitist, generational")
     end
 
-    if plot_kind == "both" && !isnothing(output_path)
-        error("--output can only be used with plot kinds 'trace' or 'feature-count'")
+    if plot_kind in ("both", "all") && !isnothing(output_path)
+        error("--output can only be used with plot kinds 'trace', 'feature-count', or 'stn'")
     end
 
     return (
@@ -135,21 +137,33 @@ function parse_cli(args::Vector{String})
 end
 
 function default_trace_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
     if epsilon == 0
-        return "$(dataset_key)_ea_trace"
+        return "$(prefix)_ea_trace"
     end
 
     epsilon_tag = replace(string(epsilon), "." => "p")
-    return "$(dataset_key)_ea_trace_e$(epsilon_tag)"
+    return "$(prefix)_ea_trace_e$(epsilon_tag)"
 end
 
 function default_feature_count_overlay_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
     if epsilon == 0
-        return "$(dataset_key)_ea_feature_count"
+        return "$(prefix)_ea_feature_count"
     end
 
     epsilon_tag = replace(string(epsilon), "." => "p")
-    return "$(dataset_key)_ea_feature_count_e$(epsilon_tag)"
+    return "$(prefix)_ea_feature_count_e$(epsilon_tag)"
+end
+
+function default_stn_plot_name(dataset_key::AbstractString, epsilon::Real)
+    prefix = dataset_plot_metadata(dataset_key).slug
+    if epsilon == 0
+        return "$(prefix)_ea_stn"
+    end
+
+    epsilon_tag = replace(string(epsilon), "." => "p")
+    return "$(prefix)_ea_stn_e$(epsilon_tag)"
 end
 
 if any(arg -> arg in ("-h", "--help"), ARGS)
@@ -161,6 +175,7 @@ cli = parse_cli(ARGS)
 rng = isnothing(cli.seed) ? Random.default_rng() : MersenneTwister(cli.seed)
 
 landscape = load_landscape_key(cli.dataset_key)
+metadata = dataset_plot_metadata(cli.dataset_key)
 result = run_single_objective_ea(
     landscape;
     iterations=cli.iterations,
@@ -176,7 +191,7 @@ result = run_single_objective_ea(
     keep_history=cli.plot_kind != "none",
 )
 
-println("Single-objective GA on `$(landscape.name)`")
+println("Single-objective GA on `$(metadata.label)`")
 println("Iterations: $(result.iterations)")
 println("Epsilon: $(result.epsilon)")
 println("Population size: $(result.population_size)")
@@ -188,31 +203,31 @@ println("Best:    index=$(result.best_index), features=$(result.best_num_selecte
 values = cli.epsilon == 0 ? fitness_values(landscape) : penalized_fitness_values(landscape, cli.epsilon)
 fitness_label = cli.epsilon == 0 ? "Fitness" : "Penalized fitness"
 
-if cli.plot_kind in ("trace", "both")
+if cli.plot_kind in ("trace", "both", "all")
     trace_output = if cli.plot_kind == "trace" && !isnothing(cli.output_path)
         cli.output_path
     else
-        default_ea_plot_path(default_trace_plot_name(cli.dataset_key, cli.epsilon))
+        default_ea_plot_path(default_trace_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
     end
 
     trace_title = cli.epsilon == 0 ?
-        "$(landscape.name) single-objective GA trace" :
-        "$(landscape.name) single-objective GA trace (epsilon=$(cli.epsilon))"
+        "$(metadata.label) single-objective GA trace" :
+        "$(metadata.label) single-objective GA trace (epsilon=$(cli.epsilon))"
 
     saved_path = save_ea_trace_plot(result, trace_output; title=trace_title, fitness_label=fitness_label)
-    println("Saved GA trace plot for `$(landscape.name)` to `$saved_path`.")
+    println("Saved GA trace plot for `$(metadata.label)` to `$saved_path`.")
 end
 
-if cli.plot_kind in ("feature-count", "both")
+if cli.plot_kind in ("feature-count", "both", "all")
     overlay_output = if cli.plot_kind == "feature-count" && !isnothing(cli.output_path)
         cli.output_path
     else
-        default_ea_plot_path(default_feature_count_overlay_name(cli.dataset_key, cli.epsilon))
+        default_ea_plot_path(default_feature_count_overlay_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
     end
 
     overlay_title = cli.epsilon == 0 ?
-        "$(landscape.name) fitness by feature count with GA path" :
-        "$(landscape.name) fitness by feature count with GA path (epsilon=$(cli.epsilon))"
+        "$(metadata.label) fitness by feature count with GA path" :
+        "$(metadata.label) fitness by feature count with GA path (epsilon=$(cli.epsilon))"
 
     saved_path = save_fitness_by_feature_count_with_ea_plot(
         landscape,
@@ -222,5 +237,27 @@ if cli.plot_kind in ("feature-count", "both")
         title=overlay_title,
         fitness_label=fitness_label,
     )
-    println("Saved GA feature-count plot for `$(landscape.name)` to `$saved_path`.")
+    println("Saved GA feature-count plot for `$(metadata.label)` to `$saved_path`.")
+end
+
+if cli.plot_kind in ("stn", "all")
+    stn_output = if cli.plot_kind == "stn" && !isnothing(cli.output_path)
+        cli.output_path
+    else
+        default_stn_plot_path(default_stn_plot_name(cli.dataset_key, cli.epsilon); dataset_key=cli.dataset_key)
+    end
+
+    stn_title = cli.epsilon == 0 ?
+        "$(metadata.label) search trajectory network" :
+        "$(metadata.label) search trajectory network (epsilon=$(cli.epsilon))"
+
+    saved_path = save_search_trajectory_network_plot(
+        landscape,
+        result,
+        stn_output;
+        values=values,
+        title=stn_title,
+        fitness_label=fitness_label,
+    )
+    println("Saved GA search trajectory network for `$(metadata.label)` to `$saved_path`.")
 end
