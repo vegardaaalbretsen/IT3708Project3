@@ -2,8 +2,8 @@ using IT3708Project3
 using Random
 
 function usage()
-    println("Usage: julia --project=. run_ea.jl <dataset-key|triangle> [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
-    println("       julia --project=. run_ea.jl <dataset-key|triangle> [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|both] [--output path]")
+    println("Usage: julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
+    println("       julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|both] [--output path]")
     println("")
     println("Plot kinds: none, trace, feature-count, both")
     println("")
