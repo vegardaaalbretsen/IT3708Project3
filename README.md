@@ -61,6 +61,45 @@ julia --project=. run_ea.jl triangle 5000 0.1 --plot both --seed 42 --initial-in
 julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2
 ```
 
+`run_ea.jl` supports:
+
+- `--plot none|trace|feature-count|both`
+- `--popsize N`
+- `--pc V`
+- `--pm V`
+- `--tournament-size N`
+- `--survivor-mode elitist|generational`
+- `--elite N`
+
+The GA runner uses `run_single_objective_ea(...)`, implemented in `src/feature_main.jl` on top of the reusable core in `src/general_ga.jl`. Plotting automatically enables history collection for that run.
+
+If you call the API directly, `keep_history=false` avoids storing per-generation traces, while `keep_history=true` enables trace and feature-count path plots.
+
+Example:
+
+```julia
+using IT3708Project3
+using Random
+
+landscape = load_landscape_key("breast-w")
+result = run_single_objective_ea(
+    landscape;
+    iterations=500,
+    epsilon=0.01,
+    population_size=150,
+    crossover_probability=0.9,
+    mutation_probability=0.02,
+    tournament_size=5,
+    survivor_mode=:generational,
+    elite=2,
+    rng=MersenneTwister(42),
+    keep_history=true,
+)
+
+save_ea_trace_plot(result, "exports/plots/ea/breast-w_ga_trace.png")
+save_fitness_by_feature_count_with_ea_plot(landscape, result, "exports/plots/ea/breast-w_ga_feature_count.png")
+```
+
 Run the swarm EA on a landscape:
 
 ```bash
