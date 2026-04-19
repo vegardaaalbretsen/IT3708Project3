@@ -1,4 +1,5 @@
 using IT3708Project3
+using Random
 using Test
 
 @testset "Real landscape parsing" begin
@@ -115,4 +116,78 @@ end
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
+end
+
+@testset "Standard EA" begin
+    tiny = Landscape(
+        "tiny-ea",
+        2,
+        collect(0:3),
+        count_ones.(collect(0:3)),
+        [0.0, 0.8, 0.9, 1.0],
+        zeros(4),
+        true,
+    )
+
+    rng = MersenneTwister(7)
+    for _ in 1:100
+        child = standard_bit_mutation(1, 2; rng=rng, allow_zero=false)
+        @test 1 <= child <= 3
+    end
+
+    raw_result = run_standard_ea(
+        tiny;
+        iterations=20,
+        epsilon=0.0,
+        initial_index=0,
+        rng=MersenneTwister(11),
+        keep_history=true,
+    )
+
+    @test raw_result.best_index == 3
+    @test raw_result.best_accuracy == 1.0
+    @test raw_result.best_penalized_fitness == 1.0
+    @test raw_result.best_num_selected == 2
+    @test length(raw_result.current_history) == 21
+    @test length(raw_result.best_history) == 21
+    @test length(raw_result.current_num_selected_history) == 21
+    @test length(raw_result.best_num_selected_history) == 21
+    @test raw_result.current_index_history[1] == 0
+    @test raw_result.best_index_history[end] == 3
+
+    penalized_result = run_standard_ea(
+        tiny;
+        iterations=20,
+        epsilon=0.15,
+        initial_index=3,
+        rng=MersenneTwister(5),
+    )
+
+    @test penalized_result.best_index == 2
+    @test penalized_result.best_accuracy == 0.9
+    @test isapprox(penalized_result.best_penalized_fitness, 0.75; atol=1e-12)
+    @test penalized_result.best_num_selected == 1
+    @test penalized_result.current_history === nothing
+    @test penalized_result.best_history === nothing
+    @test penalized_result.current_num_selected_history === nothing
+    @test penalized_result.best_num_selected_history === nothing
+
+    trace_data = ea_trace_plot_data(raw_result)
+    @test trace_data.iterations == collect(0:20)
+    @test trace_data.current_fitness == raw_result.current_history
+    @test trace_data.best_num_selected == raw_result.best_num_selected_history
+
+    output_png = tempname() * ".png"
+    exported_path = save_ea_trace_plot(raw_result, output_png; title="EA Trace Test")
+    @test exported_path == output_png
+    @test isfile(output_png)
+    @test filesize(output_png) > 0
+
+    overlay_png = tempname() * ".png"
+    overlay_path = save_fitness_by_feature_count_with_ea_plot(tiny, raw_result, overlay_png; title="EA Feature Count Test")
+    @test overlay_path == overlay_png
+    @test isfile(overlay_png)
+    @test filesize(overlay_png) > 0
+
+    @test_throws ArgumentError plot_fitness_by_feature_count_with_ea(tiny, penalized_result)
 end

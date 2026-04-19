@@ -4,6 +4,7 @@ include("datasets.jl")
 include("types.jl")
 include("parser.jl")
 include("landscape.jl")
+include("ea.jl")
 include("triangle.jl")
 include("hbm.jl")
 include("visualization.jl")
@@ -13,6 +14,7 @@ export DATASETS,
        default_output_path,
        default_hbm_plot_path,
        default_feature_count_plot_path,
+       default_ea_plot_path,
        parse_dataset,
        write_csv,
        load_landscape,
@@ -22,6 +24,8 @@ export DATASETS,
        fitness,
        penalty,
        penalized_fitness,
+       standard_bit_mutation,
+       run_standard_ea,
        triangle_fitness,
        triangle_landscape,
        HBMNode,
@@ -34,6 +38,11 @@ export DATASETS,
        save_hbm_plot,
        feature_count_plot_data,
        plot_fitness_by_feature_count,
-       save_fitness_by_feature_count_plot
+       save_fitness_by_feature_count_plot,
+       plot_fitness_by_feature_count_with_ea,
+       save_fitness_by_feature_count_with_ea_plot,
+       ea_trace_plot_data,
+       plot_ea_trace,
+       save_ea_trace_plot
 
 end # module IT3708Project3
