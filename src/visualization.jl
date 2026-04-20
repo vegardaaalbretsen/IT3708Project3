@@ -514,6 +514,512 @@ function save_ea_trace_plot(result,
     return output_path
 end
 
+function nsga2_pareto_plot_data(result)
+    pareto_indices = getproperty(result, :pareto_indices)
+    pareto_accuracy = getproperty(result, :pareto_accuracy)
+    pareto_num_selected = getproperty(result, :pareto_num_selected)
+    pareto_time = getproperty(result, :pareto_time)
+    pareto_penalized_fitness = getproperty(result, :pareto_penalized_fitness)
+
+    lengths = (
+        length(pareto_indices),
+        length(pareto_accuracy),
+        length(pareto_num_selected),
+        length(pareto_time),
+        length(pareto_penalized_fitness),
+    )
+    all(==(first(lengths)), lengths) ||
+        throw(ArgumentError("NSGA-II Pareto result vectors must have the same length"))
+
+    return (
+        indices = pareto_indices,
+        accuracy = pareto_accuracy,
+        num_selected = pareto_num_selected,
+        time = pareto_time,
+        penalized_fitness = pareto_penalized_fitness,
+        best_penalized_index = getproperty(result, :best_penalized_index),
+        best_penalized_accuracy = getproperty(result, :best_penalized_accuracy),
+        best_penalized_num_selected = getproperty(result, :best_penalized_num_selected),
+        best_penalized_time = getproperty(result, :best_penalized_time),
+        best_penalized_fitness = getproperty(result, :best_penalized_fitness),
+        epsilon = getproperty(result, :epsilon),
+    )
+end
+
+function plot_nsga2_pareto_front(landscape::Landscape,
+                                 result;
+                                 title::AbstractString = "$(landscape.name) NSGA-II Pareto Front",
+                                 size::Tuple{Int, Int} = (1400, 900),
+                                 dpi::Int = 200)
+    plot_data = nsga2_pareto_plot_data(result)
+
+    plt = scatter(
+        landscape.num_selected,
+        landscape.accuracy;
+        ms = 3.0,
+        markeralpha = 0.24,
+        markercolor = :gray35,
+        markerstrokewidth = 0,
+        label = "Subsets",
+        xlabel = "Number of selected features",
+        ylabel = "Accuracy",
+        title = title,
+        legend = :bottomright,
+        xlims = (0, landscape.num_features + 0.5),
+        xticks = 0:landscape.num_features,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        size = size,
+        dpi = dpi,
+    )
+
+    if !isempty(plot_data.indices)
+        plot!(
+            plt,
+            plot_data.num_selected,
+            plot_data.accuracy;
+            linewidth = 2.8,
+            color = :black,
+            alpha = 0.7,
+            label = "Pareto front",
+        )
+
+        scatter!(
+            plt,
+            plot_data.num_selected,
+            plot_data.accuracy;
+            ms = 8.5,
+            markercolor = :dodgerblue3,
+            markerstrokecolor = :black,
+            markerstrokewidth = 0.5,
+            label = "Pareto points",
+        )
+
+        scatter!(
+            plt,
+            [plot_data.best_penalized_num_selected],
+            [plot_data.best_penalized_accuracy];
+            ms = 12.0,
+            markershape = :star5,
+            markercolor = :gold3,
+            markerstrokecolor = :black,
+            markerstrokewidth = 0.8,
+            label = plot_data.epsilon == 0 ? "Best accuracy summary" : "Best penalized summary",
+        )
+    end
+
+    return plt
+end
+
+function save_nsga2_pareto_front_plot(landscape::Landscape,
+                                      result,
+                                      output_path::AbstractString;
+                                      title::AbstractString = "$(landscape.name) NSGA-II Pareto Front",
+                                      size::Tuple{Int, Int} = (1400, 900),
+                                      dpi::Int = 200)
+    plt = plot_nsga2_pareto_front(
+        landscape,
+        result;
+        title=title,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function nsga2_trace_plot_data(result)
+    pareto_accuracy_history = getproperty(result, :pareto_accuracy_history)
+    pareto_num_selected_history = getproperty(result, :pareto_num_selected_history)
+    pareto_time_history = getproperty(result, :pareto_time_history)
+    pareto_penalized_fitness_history = getproperty(result, :pareto_penalized_fitness_history)
+    front_size_history = getproperty(result, :front_size_history)
+
+    any(isnothing, (pareto_accuracy_history, pareto_num_selected_history, pareto_time_history, pareto_penalized_fitness_history, front_size_history)) &&
+        throw(ArgumentError("NSGA-II history is missing. Run run_nsga2_feature_ea(...; keep_history=true) before plotting."))
+
+    return (
+        iterations = collect(0:(length(front_size_history) - 1)),
+        best_accuracy = [maximum(history) for history in pareto_accuracy_history],
+        min_num_selected = [minimum(history) for history in pareto_num_selected_history],
+        min_time = [minimum(history) for history in pareto_time_history],
+        best_penalized_fitness = [maximum(history) for history in pareto_penalized_fitness_history],
+        front_size = front_size_history,
+    )
+end
+
+function plot_nsga2_trace(result;
+                          title::AbstractString = "NSGA-II Trace",
+                          size::Tuple{Int, Int} = (1400, 1000),
+                          dpi::Int = 200)
+    plot_data = nsga2_trace_plot_data(result)
+    show_penalized = any(
+        !isapprox(accuracy, penalized; atol=1e-12)
+        for (accuracy, penalized) in zip(plot_data.best_accuracy, plot_data.best_penalized_fitness)
+    )
+    max_front = maximum(plot_data.front_size)
+    max_selected = maximum(plot_data.min_num_selected)
+
+    accuracy_plt = plot(
+        plot_data.iterations,
+        plot_data.best_accuracy;
+        linewidth = 3.0,
+        color = :dodgerblue3,
+        label = "Max front accuracy",
+        ylabel = "Accuracy",
+        title = title,
+        legend = :bottomright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+        titlefontsize = 16,
+    )
+
+    if show_penalized
+        plot!(
+            accuracy_plt,
+            plot_data.iterations,
+            plot_data.best_penalized_fitness;
+            linewidth = 2.4,
+            linestyle = :dash,
+            color = :purple3,
+            label = "Best penalized on front",
+        )
+    end
+
+    features_plt = plot(
+        plot_data.iterations,
+        plot_data.min_num_selected;
+        linewidth = 3.0,
+        color = :darkgreen,
+        label = "Min selected features",
+        ylabel = "Selected features",
+        legend = :topright,
+        ylims = (-0.2, max_selected + 0.2),
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    time_plt = plot(
+        plot_data.iterations,
+        plot_data.min_time;
+        linewidth = 3.0,
+        color = :firebrick3,
+        label = "Min evaluation time",
+        ylabel = "Time",
+        legend = :topright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    front_plt = plot(
+        plot_data.iterations,
+        plot_data.front_size;
+        linewidth = 3.0,
+        color = :black,
+        label = "Unique Pareto points",
+        xlabel = "Iteration",
+        ylabel = "Front size",
+        legend = :topright,
+        ylims = (0.8, max_front + 0.2),
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
+    return plot(
+        accuracy_plt,
+        features_plt,
+        time_plt,
+        front_plt;
+        layout = grid(4, 1, heights = [0.34, 0.22, 0.22, 0.22]),
+        size = size,
+        dpi = dpi,
+        background_color = :white,
+        link = :x,
+    )
+end
+
+function save_nsga2_trace_plot(result,
+                               output_path::AbstractString;
+                               title::AbstractString = "NSGA-II Trace",
+                               size::Tuple{Int, Int} = (1400, 1000),
+                               dpi::Int = 200)
+    plt = plot_nsga2_trace(
+        result;
+        title=title,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function nsga2_search_trajectory_network_data(landscape::Landscape,
+                                             result;
+                                             values = penalized_fitness_values(landscape, getproperty(result, :epsilon)))
+    population_indices_history = getproperty(result, :population_indices_history)
+    transition_edges_history = getproperty(result, :transition_edges_history)
+
+    any(isnothing, (population_indices_history, transition_edges_history)) &&
+        throw(ArgumentError("NSGA-II history is missing. Run run_nsga2_feature_ea(...; keep_history=true) before plotting the search trajectory network."))
+
+    isempty(population_indices_history) &&
+        throw(ArgumentError("NSGA-II population history must not be empty"))
+
+    nodes = build_hbm(landscape; values=values)
+    node_lookup = Dict(node.index => node for node in nodes)
+    visit_counts = Dict{Int, Int}()
+    start_counts = Dict{Int, Int}()
+    end_counts = Dict{Int, Int}()
+    edge_counts = Dict{Tuple{Int, Int}, Int}()
+
+    for index in first(population_indices_history)
+        start_counts[index] = get(start_counts, index, 0) + 1
+    end
+
+    for snapshot in population_indices_history
+        for index in snapshot
+            visit_counts[index] = get(visit_counts, index, 0) + 1
+        end
+    end
+
+    for index in last(population_indices_history)
+        end_counts[index] = get(end_counts, index, 0) + 1
+    end
+
+    for generation_edges in transition_edges_history
+        for (from, to) in generation_edges
+            from == to && continue
+            edge = from < to ? (from, to) : (to, from)
+            edge_counts[edge] = get(edge_counts, edge, 0) + 1
+        end
+    end
+
+    visited_indices = sort!(collect(keys(visit_counts)); by = index -> (-visit_counts[index], index))
+    start_indices = sort!(collect(keys(start_counts)); by = index -> (-start_counts[index], index))
+    end_indices = sort!(collect(keys(end_counts)); by = index -> (-end_counts[index], index))
+
+    return (
+        nodes = nodes,
+        node_lookup = node_lookup,
+        visited_indices = visited_indices,
+        visit_counts = visit_counts,
+        start_indices = start_indices,
+        start_counts = start_counts,
+        end_indices = end_indices,
+        end_counts = end_counts,
+        edge_counts = edge_counts,
+        pareto_indices = getproperty(result, :pareto_indices),
+        best_penalized_index = getproperty(result, :best_penalized_index),
+    )
+end
+
+function plot_nsga2_search_trajectory_network(landscape::Landscape,
+                                              result;
+                                              values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                              title::AbstractString = "$(landscape.name) NSGA-II Search Trajectory Network",
+                                              fitness_label::AbstractString = "Penalized fitness",
+                                              size::Tuple{Int, Int} = (2200, 1400),
+                                              dpi::Int = 300)
+    network_data = nsga2_search_trajectory_network_data(landscape, result; values=values)
+    nodes = network_data.nodes
+    plot_data = hbm_plot_data(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
+    isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
+
+    node_lookup = network_data.node_lookup
+    x_bits = ceil(Int, landscape.num_features / 2)
+    y_bits = fld(landscape.num_features, 2)
+    x_max = (1 << x_bits) - 1
+    y_max = (1 << y_bits) - 1
+    marker_sizes = hbm_marker_sizes(x_max + 1, y_max + 1)
+    x_ticks = ([0.0, Float64(x_max)], ["2^0 - 1", "2^$(x_bits) - 1"])
+    y_ticks = ([0.0, Float64(y_max)], ["2^0 - 1", "2^$(y_bits) - 1"])
+
+    plt = scatter(
+        plot_data.x,
+        plot_data.y;
+        marker_z = plot_data.fitness,
+        color = cgrad([:darkgreen, :ivory, :purple]),
+        ms = marker_sizes.base,
+        markeralpha = 0.20,
+        markerstrokewidth = 0,
+        xlabel = "First half of bitstring",
+        ylabel = "Second half of bitstring",
+        title = title,
+        label = "Landscape",
+        legend = :outertopright,
+        colorbar = :right,
+        colorbar_title = fitness_label,
+        colorbar_tickfontsize = 18,
+        aspect_ratio = :equal,
+        size = size,
+        dpi = dpi,
+        xticks = x_ticks,
+        yticks = y_ticks,
+        xlims = (-0.8, x_max + 0.8),
+        ylims = (-0.8, y_max + 0.8),
+        grid = true,
+        gridalpha = 0.18,
+        framestyle = :box,
+        background_color = :white,
+        tickfontsize = 18,
+        guidefontsize = 24,
+        titlefontsize = 28,
+    )
+
+    if !isempty(network_data.edge_counts)
+        max_edge_count = maximum(Base.values(network_data.edge_counts))
+        edge_label_used = false
+
+        for ((from, to), count) in sort!(collect(network_data.edge_counts); by = last)
+            from_node = node_lookup[from]
+            to_node = node_lookup[to]
+            edge_strength = count / max_edge_count
+
+            plot!(
+                plt,
+                [Float64(from_node.x), Float64(to_node.x)],
+                [Float64(from_node.y), Float64(to_node.y)];
+                linewidth = 1.0 + 5.0 * sqrt(edge_strength),
+                color = :black,
+                alpha = 0.12 + 0.52 * edge_strength,
+                label = edge_label_used ? "" : "Transitions",
+            )
+            edge_label_used = true
+        end
+    end
+
+    if !isempty(network_data.visited_indices)
+        max_visit_count = maximum(Base.values(network_data.visit_counts))
+        visited_nodes = [node_lookup[index] for index in network_data.visited_indices]
+        visited_sizes = [
+            marker_sizes.base + 0.95 * sqrt(network_data.visit_counts[index] / max_visit_count) * marker_sizes.optimum
+            for index in network_data.visited_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in visited_nodes],
+            Float64[node.y for node in visited_nodes];
+            ms = visited_sizes,
+            markercolor = :black,
+            markeralpha = 0.45,
+            markerstrokecolor = :white,
+            markerstrokewidth = 0.7,
+            label = "Visited states",
+        )
+    end
+
+    if !isempty(network_data.start_indices)
+        max_start_count = maximum(Base.values(network_data.start_counts))
+        start_nodes = [node_lookup[index] for index in network_data.start_indices]
+        start_sizes = [
+            marker_sizes.optimum + 0.7 * sqrt(network_data.start_counts[index] / max_start_count) * marker_sizes.base
+            for index in network_data.start_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in start_nodes],
+            Float64[node.y for node in start_nodes];
+            ms = start_sizes,
+            markershape = :diamond,
+            markercolor = :white,
+            markerstrokecolor = :black,
+            markerstrokewidth = 1.4,
+            label = "Initial population",
+        )
+    end
+
+    if !isempty(network_data.end_indices)
+        max_end_count = maximum(Base.values(network_data.end_counts))
+        end_nodes = [node_lookup[index] for index in network_data.end_indices]
+        end_sizes = [
+            marker_sizes.optimum + 0.7 * sqrt(network_data.end_counts[index] / max_end_count) * marker_sizes.base
+            for index in network_data.end_indices
+        ]
+        scatter!(
+            plt,
+            Float64[node.x for node in end_nodes],
+            Float64[node.y for node in end_nodes];
+            ms = end_sizes,
+            markershape = :utriangle,
+            markercolor = :forestgreen,
+            markerstrokewidth = 0,
+            label = "Final population",
+        )
+    end
+
+    if !isempty(network_data.pareto_indices)
+        pareto_nodes = [node_lookup[index] for index in network_data.pareto_indices]
+        scatter!(
+            plt,
+            Float64[node.x for node in pareto_nodes],
+            Float64[node.y for node in pareto_nodes];
+            ms = marker_sizes.optimum + 2.0,
+            markershape = :circle,
+            markercolor = :darkorange3,
+            markerstrokecolor = :black,
+            markerstrokewidth = 0.7,
+            label = "Final Pareto front",
+        )
+    end
+
+    best_node = node_lookup[network_data.best_penalized_index]
+    scatter!(
+        plt,
+        [Float64(best_node.x)],
+        [Float64(best_node.y)];
+        ms = marker_sizes.optimum + 6.0,
+        markershape = :star5,
+        markercolor = :gold3,
+        markerstrokecolor = :black,
+        markerstrokewidth = 0.9,
+        label = "Best penalized summary",
+    )
+
+    return plt
+end
+
+function save_nsga2_search_trajectory_network_plot(landscape::Landscape,
+                                                   result,
+                                                   output_path::AbstractString;
+                                                   values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
+                                                   title::AbstractString = "$(landscape.name) NSGA-II Search Trajectory Network",
+                                                   fitness_label::AbstractString = "Penalized fitness",
+                                                   size::Tuple{Int, Int} = (2200, 1400),
+                                                   dpi::Int = 300)
+    plt = plot_nsga2_search_trajectory_network(
+        landscape,
+        result;
+        values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
 function compress_ea_path(feature_counts::AbstractVector{<:Integer},
                           fitness_values::AbstractVector{<:Real})
     length(feature_counts) == length(fitness_values) ||

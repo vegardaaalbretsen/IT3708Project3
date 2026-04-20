@@ -2,6 +2,7 @@ module GACore
 
 using Random
 using Statistics
+using Base.Threads
 
 export GAParams, run_ga, entropy_bits
 
@@ -17,6 +18,7 @@ Base.@kwdef mutable struct GAParams
     objective::Symbol = :max
     log_every::Int = 0
     record_history::Bool = true
+    threaded_evaluation::Bool = false
 
     # ----- generalized crowding -----
     crowding_alpha::Float64 = 0.0   # 0 = deterministic, 1 = probabilistic
@@ -150,6 +152,30 @@ function run_ga(nbits::Int, fitness_fn::Function; params::GAParams=GAParams())
     return run_ga(nbits, fitness_fn, nothing; params=params)
 end
 
+function evaluate_population(population::Vector{BitVector},
+                             fitness_fn::Function,
+                             objective::Symbol;
+                             threaded_evaluation::Bool = false)
+    raw = Vector{Float64}(undef, length(population))
+    score = Vector{Float64}(undef, length(population))
+
+    if threaded_evaluation && nthreads() > 1 && length(population) > 1
+        Threads.@threads for i in 1:length(population)
+            value = fitness_fn(population[i])
+            raw[i] = value
+            score[i] = to_score(value, objective)
+        end
+    else
+        for i in eachindex(population)
+            value = fitness_fn(population[i])
+            raw[i] = value
+            score[i] = to_score(value, objective)
+        end
+    end
+
+    return raw, score
+end
+
 function run_ga(nbits::Int,
                 fitness_fn::Function,
                 initial_population::Union{Nothing, Vector{BitVector}};
@@ -199,14 +225,12 @@ function run_ga(nbits::Int,
     worse(a, b) = params.objective === :max ? (a < b) : (a > b)
 
     function record_population!(population::Vector{BitVector})
-        raw = Vector{Float64}(undef, length(population))
-        score = Vector{Float64}(undef, length(population))
-
-        for i in eachindex(population)
-            value = fitness_fn(population[i])
-            raw[i] = value
-            score[i] = to_score(value, params.objective)
-        end
+        raw, score = evaluate_population(
+            population,
+            fitness_fn,
+            params.objective;
+            threaded_evaluation=params.threaded_evaluation,
+        )
 
         current_best_i = objective_best_index(raw, params.objective)
         current_worst_i = objective_worst_index(raw, params.objective)
@@ -271,12 +295,14 @@ function run_ga(nbits::Int,
             end
         end
 
-        raw_off = Vector{Float64}(undef, length(offspring))
-        score_off = Vector{Float64}(undef, length(offspring))
+        raw_off, score_off = evaluate_population(
+            offspring,
+            fitness_fn,
+            params.objective;
+            threaded_evaluation=params.threaded_evaluation,
+        )
         for i in eachindex(offspring)
-            r = fitness_fn(offspring[i])
-            raw_off[i] = r
-            score_off[i] = to_score(r, params.objective)
+            r = raw_off[i]
 
             if worse(r, worst_raw)
                 worst_raw = r
