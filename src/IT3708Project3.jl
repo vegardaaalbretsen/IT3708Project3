@@ -22,6 +22,7 @@ include("visualization.jl")
 export DATASETS,
        Landscape,
        default_output_path,
+       default_nsga2_result_path,
        default_hbm_plot_path,
        default_feature_count_plot_path,
        default_ea_plot_path,

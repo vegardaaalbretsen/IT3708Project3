@@ -126,6 +126,8 @@ julia --project=. run_nsga2.jl breast-w 500 0.01 --plot all
 - `--output path`
 - `--plot-output path`
 
+By default, the Pareto-front CSV written by `run_nsga2.jl` is stored under `exports/csv/results/` so NSGA-II outputs stay separate from the parsed landscape CSV files.
+
 The NSGA-II runner uses `run_nsga2_feature_ea(...)`, implemented in `src/feature_main.jl` on top of the non-dominated sorting and crowding operators in `src/nsga2_core.jl`.
 
 NSGA-II uses two objectives during selection:

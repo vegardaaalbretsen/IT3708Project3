@@ -118,15 +118,13 @@ function parse_cli(args::Vector{String})
     )
 end
 
-function default_nsga2_output_path(dataset_key::AbstractString, epsilon::Real)
-    filename = if epsilon == 0
-        "$(dataset_key)_nsga2_front.csv"
+function default_nsga2_output_name(dataset_key::AbstractString, epsilon::Real)
+    return if epsilon == 0
+        "$(dataset_key)_nsga2_front"
     else
         epsilon_tag = replace(string(epsilon), "." => "p")
-        "$(dataset_key)_nsga2_front_e$(epsilon_tag).csv"
+        "$(dataset_key)_nsga2_front_e$(epsilon_tag)"
     end
-
-    return joinpath("exports", "csv", filename)
 end
 
 function default_nsga2_pareto_plot_name(dataset_key::AbstractString, epsilon::Real)
@@ -184,7 +182,9 @@ end
 
 cli = parse_cli(ARGS)
 rng = isnothing(cli.seed) ? Random.default_rng() : MersenneTwister(cli.seed)
-output_path = isnothing(cli.output_path) ? default_nsga2_output_path(cli.dataset_key, cli.epsilon) : cli.output_path
+output_path = isnothing(cli.output_path) ?
+    default_nsga2_result_path(default_nsga2_output_name(cli.dataset_key, cli.epsilon)) :
+    cli.output_path
 
 landscape = load_landscape_key(cli.dataset_key)
 result = run_nsga2_feature_ea(

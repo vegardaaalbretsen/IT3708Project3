@@ -47,6 +47,7 @@ end
     @test isapprox(IT3708Project3.penalty(3, 0.1), 0.3; atol=1e-12)
     @test isapprox(IT3708Project3.penalized_fitness(0.8, 3, 0.1), 0.5; atol=1e-12)
     @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.1)[1], landscape.accuracy[1] - 0.1; atol=1e-12)
+    @test endswith(default_nsga2_result_path("breast-w_nsga2_front"), joinpath("csv", "results", "breast-w_nsga2_front.csv"))
     @test endswith(default_stn_plot_path("breast-w_nsga2_stn"), joinpath("stn", "breast-w_nsga2_stn.png"))
 end
 

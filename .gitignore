@@ -29,3 +29,5 @@ JuliaLocalPreferences.toml
 
 plots/
 .DS_Store
+
+exports/csv/results/
