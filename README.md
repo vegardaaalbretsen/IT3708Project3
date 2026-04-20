@@ -66,7 +66,7 @@ julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle
 `run_experiments.jl` writes three CSV files under `exports/csv/experiments/`:
 
 - `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon
-- `generation_stats.csv`: min, average, max, best-so-far fitness, and diversity entropy per generation
+- `generation_stats.csv`: min, average, max, best-so-far fitness, and normalized diversity entropy per generation
 - `summary.csv`: average and standard deviation of best fitness across runs
 
 Create plots from the experiment generation statistics:
@@ -83,7 +83,7 @@ The plotting script writes one PNG per landscape and epsilon under `exports/plot
 
 - `best_so_far_fitness`: main convergence plot
 - `mean_fitness`: average population quality over time
-- `diversity_entropy`: population diversity over time
+- `diversity_entropy`: normalized population diversity over time, from `0.0` to `1.0`
 
 If you want diversity plots, rerun `run_experiments.jl` first so `generation_stats.csv` includes the `diversity_entropy` column.
 

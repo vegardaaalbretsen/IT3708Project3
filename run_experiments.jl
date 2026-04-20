@@ -214,6 +214,7 @@ end
 function entropy_from_indices(indices::AbstractVector{<:Integer}, n_features::Integer)
     isempty(indices) && return 0.0
     n = Int(n_features)
+    n <= 0 && return 0.0
     entropy = 0.0
 
     for bit in 0:(n - 1)
@@ -225,7 +226,7 @@ function entropy_from_indices(indices::AbstractVector{<:Integer}, n_features::In
         end
     end
 
-    return entropy
+    return entropy / n
 end
 
 function csv_value(value)
@@ -324,7 +325,7 @@ function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, see
                 Float64(result.mean_history[i]),
                 Float64(result.max_history[i]),
                 Float64(result.best_history[i]),
-                Float64(result.entropy_history[i]),
+                landscape.num_features <= 0 ? 0.0 : Float64(result.entropy_history[i]) / landscape.num_features,
             ),
         )
     end

@@ -9,7 +9,7 @@ const METRIC_LABELS = Dict(
     "mean_fitness" => "Mean fitness",
     "max_fitness" => "Maximum fitness",
     "best_so_far_fitness" => "Best-so-far fitness",
-    "diversity_entropy" => "Diversity entropy",
+    "diversity_entropy" => "Normalized diversity entropy",
 )
 
 struct GenerationStatRow
