@@ -17,6 +17,7 @@ For threaded evaluation in the GA, NSGA-II, and swarm runners, start Julia with 
 - `src/triangle.jl`: triangle fitness function and synthetic landscape generator
 - `src/hbm.jl`: HBM mapping, one-flip neighbors, and optima detection
 - `src/visualization.jl`: HBM, feature-count, EA, and swarm plotting/animation
+- `run_experiments.jl`: batch experiment runner and summary CSV generator
 - `benchmark_threaded_eval.jl`: serial vs threaded evaluation benchmark for GA, NSGA-II, and swarm
 
 ## Commands
@@ -52,6 +53,20 @@ julia --project=. plot_feature_count.jl breast-w
 julia --project=. plot_feature_count.jl breast-w 0.01
 julia --project=. plot_feature_count.jl triangle
 ```
+
+Run batch experiments for the report:
+
+```bash
+julia --threads auto --project=. run_experiments.jl
+julia --threads auto --project=. run_experiments.jl --seeds 10 --epsilon 0.01
+julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle --algorithms ga,swarm
+```
+
+`run_experiments.jl` writes three CSV files under `exports/csv/experiments/`:
+
+- `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon
+- `generation_stats.csv`: min, average, max, and best-so-far fitness per generation
+- `summary.csv`: average and standard deviation of best fitness across runs
 
 Run the single-objective GA on a landscape:
 
