@@ -55,6 +55,7 @@ struct GenerationStat
     mean_fitness::Float64
     max_fitness::Float64
     best_so_far_fitness::Float64
+    diversity_entropy::Float64
 end
 
 struct ExperimentSummary
@@ -210,6 +211,23 @@ function values_for_indices(landscape::Landscape, indices::AbstractVector{<:Inte
     ]
 end
 
+function entropy_from_indices(indices::AbstractVector{<:Integer}, n_features::Integer)
+    isempty(indices) && return 0.0
+    n = Int(n_features)
+    entropy = 0.0
+
+    for bit in 0:(n - 1)
+        ones_count = count(index -> !iszero(Int(index) & (1 << bit)), indices)
+        p = ones_count / length(indices)
+
+        if 0 < p < 1
+            entropy -= p * log2(p) + (1 - p) * log2(1 - p)
+        end
+    end
+
+    return entropy
+end
+
 function csv_value(value)
     if ismissing(value) || isnothing(value)
         return ""
@@ -274,7 +292,8 @@ function make_generation_stat(algorithm::Symbol,
                               epsilon::Float64,
                               generation::Int,
                               values::AbstractVector{<:Real},
-                              best_so_far::Real)
+                              best_so_far::Real,
+                              diversity_entropy::Real)
     return GenerationStat(
         algorithm,
         landscape.name,
@@ -285,6 +304,7 @@ function make_generation_stat(algorithm::Symbol,
         mean(values),
         maximum(values),
         Float64(best_so_far),
+        Float64(diversity_entropy),
     )
 end
 
@@ -304,6 +324,7 @@ function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, see
                 Float64(result.mean_history[i]),
                 Float64(result.max_history[i]),
                 Float64(result.best_history[i]),
+                Float64(result.entropy_history[i]),
             ),
         )
     end
@@ -316,9 +337,11 @@ function nsga2_generation_stats(landscape::Landscape, result, epsilon::Float64, 
     best_so_far = -Inf
 
     for i in eachindex(result.population_indices_history)
-        values = values_for_indices(landscape, result.population_indices_history[i], epsilon)
+        population_indices = result.population_indices_history[i]
+        values = values_for_indices(landscape, population_indices, epsilon)
         best_so_far = max(best_so_far, maximum(values))
-        push!(rows, make_generation_stat(:nsga2, landscape, seed, epsilon, i - 1, values, best_so_far))
+        diversity = entropy_from_indices(population_indices, landscape.num_features)
+        push!(rows, make_generation_stat(:nsga2, landscape, seed, epsilon, i - 1, values, best_so_far, diversity))
     end
 
     return rows
@@ -328,9 +351,11 @@ function swarm_generation_stats(landscape::Landscape, result, epsilon::Float64, 
     rows = GenerationStat[]
 
     for i in eachindex(result.particle_index_history)
-        values = values_for_indices(landscape, result.particle_index_history[i], epsilon)
+        particle_indices = result.particle_index_history[i]
+        values = values_for_indices(landscape, particle_indices, epsilon)
         best_so_far = result.best_penalized_fitness_history[i]
-        push!(rows, make_generation_stat(:swarm, landscape, seed, epsilon, i - 1, values, best_so_far))
+        diversity = entropy_from_indices(particle_indices, landscape.num_features)
+        push!(rows, make_generation_stat(:swarm, landscape, seed, epsilon, i - 1, values, best_so_far, diversity))
     end
 
     return rows
@@ -564,6 +589,7 @@ function write_generation_stats_csv(rows::Vector{GenerationStat}, path::Abstract
     header = [
         "algorithm", "landscape", "seed", "epsilon", "generation",
         "min_fitness", "mean_fitness", "max_fitness", "best_so_far_fitness",
+        "diversity_entropy",
     ]
 
     return write_csv_rows(
@@ -573,6 +599,7 @@ function write_generation_stats_csv(rows::Vector{GenerationStat}, path::Abstract
         row -> (
             row.algorithm, row.landscape, row.seed, row.epsilon, row.generation,
             row.min_fitness, row.mean_fitness, row.max_fitness, row.best_so_far_fitness,
+            row.diversity_entropy,
         ),
     )
 end
