@@ -73,3 +73,16 @@ end
 function fitness(landscape::Landscape, index::Integer)
     return landscape.accuracy[index_position(landscape, index)]
 end
+
+function candidate_state(landscape::Landscape, index::Integer, epsilon::Real)
+    accuracy = fitness(landscape, index)
+    num_selected = count_ones(index)
+    objective = penalized_fitness(accuracy, num_selected, epsilon)
+
+    return (
+        index = Int(index),
+        accuracy = accuracy,
+        penalized_fitness = objective,
+        num_selected = num_selected,
+    )
+end

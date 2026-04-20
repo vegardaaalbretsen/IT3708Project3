@@ -118,9 +118,9 @@ end
     @test filesize(output_png) > 0
 end
 
-@testset "Standard EA" begin
+@testset "Single-objective GA" begin
     tiny = Landscape(
-        "tiny-ea",
+        "tiny-ga",
         2,
         collect(0:3),
         count_ones.(collect(0:3)),
@@ -129,65 +129,253 @@ end
         true,
     )
 
-    rng = MersenneTwister(7)
-    for _ in 1:100
-        child = standard_bit_mutation(1, 2; rng=rng, allow_zero=false)
-        @test 1 <= child <= 3
-    end
-
-    raw_result = run_standard_ea(
+    result = run_single_objective_ea(
         tiny;
-        iterations=20,
+        iterations=8,
         epsilon=0.0,
-        initial_index=0,
-        rng=MersenneTwister(11),
+        initial_index=3,
+        population_size=8,
+        crossover_probability=0.85,
+        mutation_probability=0.1,
+        tournament_size=3,
+        survivor_mode=:elitist,
+        elite=2,
+        rng=MersenneTwister(17),
         keep_history=true,
     )
 
-    @test raw_result.best_index == 3
-    @test raw_result.best_accuracy == 1.0
-    @test raw_result.best_penalized_fitness == 1.0
-    @test raw_result.best_num_selected == 2
-    @test length(raw_result.current_history) == 21
-    @test length(raw_result.best_history) == 21
-    @test length(raw_result.current_num_selected_history) == 21
-    @test length(raw_result.best_num_selected_history) == 21
-    @test raw_result.current_index_history[1] == 0
-    @test raw_result.best_index_history[end] == 3
+    @test result.algorithm == :single_objective_ga
+    @test result.best_index == 3
+    @test result.best_accuracy == 1.0
+    @test result.best_penalized_fitness == 1.0
+    @test result.best_num_selected == 2
+    @test result.initial_index == 3
+    @test result.population_size == 8
+    @test result.crossover_probability == 0.85
+    @test result.mutation_probability == 0.1
+    @test result.tournament_size == 3
+    @test result.survivor_mode == :elitist
+    @test result.elite == 2
+    @test length(result.current_history) == 9
+    @test length(result.best_history) == 9
+    @test length(result.current_num_selected_history) == 9
+    @test length(result.best_num_selected_history) == 9
+    @test length(result.current_index_history) == 9
+    @test length(result.best_index_history) == 9
+    @test result.best_index_history[end] == 3
+    @test result.mean_history !== nothing
+    @test result.entropy_history !== nothing
 
-    penalized_result = run_standard_ea(
-        tiny;
-        iterations=20,
-        epsilon=0.15,
-        initial_index=3,
-        rng=MersenneTwister(5),
-    )
-
-    @test penalized_result.best_index == 2
-    @test penalized_result.best_accuracy == 0.9
-    @test isapprox(penalized_result.best_penalized_fitness, 0.75; atol=1e-12)
-    @test penalized_result.best_num_selected == 1
-    @test penalized_result.current_history === nothing
-    @test penalized_result.best_history === nothing
-    @test penalized_result.current_num_selected_history === nothing
-    @test penalized_result.best_num_selected_history === nothing
-
-    trace_data = ea_trace_plot_data(raw_result)
-    @test trace_data.iterations == collect(0:20)
-    @test trace_data.current_fitness == raw_result.current_history
-    @test trace_data.best_num_selected == raw_result.best_num_selected_history
+    trace_data = ea_trace_plot_data(result)
+    @test trace_data.iterations == collect(0:8)
+    @test trace_data.current_fitness == result.current_history
+    @test trace_data.best_num_selected == result.best_num_selected_history
 
     output_png = tempname() * ".png"
-    exported_path = save_ea_trace_plot(raw_result, output_png; title="EA Trace Test")
+    exported_path = save_ea_trace_plot(result, output_png; title="GA Trace Test")
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
 
     overlay_png = tempname() * ".png"
-    overlay_path = save_fitness_by_feature_count_with_ea_plot(tiny, raw_result, overlay_png; title="EA Feature Count Test")
+    overlay_path = save_fitness_by_feature_count_with_ea_plot(tiny, result, overlay_png; title="GA Feature Count Test")
     @test overlay_path == overlay_png
     @test isfile(overlay_png)
     @test filesize(overlay_png) > 0
 
-    @test_throws ArgumentError plot_fitness_by_feature_count_with_ea(tiny, penalized_result)
+    no_history = run_single_objective_ea(
+        tiny;
+        iterations=8,
+        epsilon=0.0,
+        initial_index=3,
+        population_size=8,
+        rng=MersenneTwister(17),
+        keep_history=false,
+    )
+
+    @test no_history.best_index == 3
+    @test no_history.initial_index == 3
+    @test no_history.current_history === nothing
+    @test no_history.best_history === nothing
+    @test no_history.current_accuracy_history === nothing
+    @test no_history.best_accuracy_history === nothing
+    @test no_history.current_num_selected_history === nothing
+    @test no_history.best_num_selected_history === nothing
+    @test no_history.current_index_history === nothing
+    @test no_history.best_index_history === nothing
+    @test no_history.mean_history === nothing
+    @test no_history.max_history === nothing
+    @test no_history.min_history === nothing
+    @test no_history.entropy_history === nothing
+
+    direct_params = IT3708Project3.GACore.GAParams(
+        popsize=3,
+        generations=0,
+        seed=1,
+        objective=:max,
+        record_history=false,
+    )
+    initial_population = BitVector[
+        BitVector([false, false]),
+        BitVector([true, false]),
+        BitVector([true, true]),
+    ]
+    best_ind, best_raw, worst_ind, worst_raw, history = IT3708Project3.GACore.run_ga(
+        2,
+        ind -> Float64(count(ind)),
+        initial_population;
+        params=direct_params,
+    )
+
+    @test best_ind == BitVector([true, true])
+    @test best_raw == 2.0
+    @test worst_ind == BitVector([false, false])
+    @test worst_raw == 0.0
+    @test history.max_hist === nothing
+    @test history.mean_hist === nothing
+    @test history.min_hist === nothing
+    @test history.ent_hist === nothing
+    @test history.current_best_raw_hist === nothing
+    @test history.current_best_ind_hist === nothing
+    @test history.best_so_far_raw_hist === nothing
+    @test history.best_so_far_ind_hist === nothing
+    @test history.initial_best_ind == BitVector([true, true])
+    @test history.initial_best_raw == 2.0
+    @test history.final_best_ind == BitVector([true, true])
+    @test history.final_best_raw == 2.0
+end
+
+@testset "Swarm EA" begin
+    @test decode_swarm_position([0.6, 0.4, 0.8], 3; allow_zero=true) == 5
+    @test decode_swarm_position([-1.0, 0.4, NaN], 3; allow_zero=false) == 2
+    @test_throws ArgumentError decode_swarm_position([0.2, 0.8], 3; allow_zero=true)
+
+    tiny = Landscape(
+        "tiny-swarm",
+        1,
+        collect(0:1),
+        count_ones.(collect(0:1)),
+        [0.1, 0.9],
+        zeros(2),
+        true,
+    )
+
+    result = run_swarm_ea(
+        tiny;
+        iterations=10,
+        epsilon=0.0,
+        swarm_size=8,
+        rng=MersenneTwister(21),
+    )
+
+    @test result.best_index == 1
+    @test result.best_accuracy == 0.9
+    @test result.best_penalized_fitness == 0.9
+    @test result.best_num_selected == 1
+    @test result.best_objective == -0.9
+    @test result.evaluations == 88
+    @test length(result.best_position) == 1
+    @test all(0 .<= result.best_position .<= 1)
+end
+
+@testset "Swarm visualization methods" begin
+    tiny = Landscape(
+        "tiny-swarm-vis",
+        2,
+        collect(0:3),
+        count_ones.(collect(0:3)),
+        [0.1, 0.8, 0.9, 1.0],
+        zeros(4),
+        true,
+    )
+
+    result = run_swarm_ea(
+        tiny;
+        iterations=4,
+        epsilon=0.1,
+        swarm_size=5,
+        rng=MersenneTwister(9),
+        keep_history=true,
+    )
+
+    @test length(result.final_particle_indices) == 5
+    @test length(result.particle_index_history) == 5
+    @test length(result.best_index_history) == 5
+    @test length(result.best_penalized_fitness_history) == 5
+    @test result.best_penalized_fitness_history[end] == result.best_penalized_fitness
+
+    trace_data = swarm_trace_plot_data(tiny, result)
+    path_data = IT3708Project3.swarm_best_path_plot_data(tiny, result)
+    @test trace_data.iterations == collect(0:4)
+    @test length(trace_data.mean_fitness) == 5
+    @test length(trace_data.median_fitness) == 5
+    @test length(trace_data.unique_subsets) == 5
+    @test length(trace_data.mean_pairwise_hamming_distance) == 5
+    @test length(trace_data.global_best_fraction) == 5
+    @test all(0 .<= trace_data.global_best_fraction)
+    @test all(trace_data.global_best_fraction .<= 1)
+    @test !isnothing(path_data)
+    @test length(path_data.indices) == 5
+    @test first(path_data.feature_path_positions) == 1
+    @test first(path_data.hbm_path_positions) == 1
+
+    feature_png = tempname() * ".png"
+    feature_path = save_fitness_by_feature_count_with_swarm_plot(
+        tiny,
+        result,
+        feature_png;
+        size=(900, 600),
+        dpi=120,
+    )
+    @test feature_path == feature_png
+    @test isfile(feature_png)
+    @test filesize(feature_png) > 0
+
+    hbm_png = tempname() * ".png"
+    hbm_path = save_hbm_with_swarm_plot(
+        tiny,
+        result,
+        hbm_png;
+        size=(1000, 700),
+        dpi=120,
+    )
+    @test hbm_path == hbm_png
+    @test isfile(hbm_png)
+    @test filesize(hbm_png) > 0
+
+    trace_png = tempname() * ".png"
+    trace_path = save_swarm_trace_plot(
+        tiny,
+        result,
+        trace_png;
+        size=(900, 700),
+        dpi=120,
+    )
+    @test trace_path == trace_png
+    @test isfile(trace_png)
+    @test filesize(trace_png) > 0
+
+    gif_path = tempname() * ".gif"
+    saved_gif = save_fitness_by_feature_count_swarm_animation(
+        tiny,
+        result,
+        gif_path;
+        fps=4,
+        size=(700, 500),
+        dpi=100,
+    )
+    @test saved_gif == gif_path
+    @test isfile(gif_path)
+    @test filesize(gif_path) > 0
+
+    no_history = run_swarm_ea(
+        tiny;
+        iterations=4,
+        epsilon=0.1,
+        swarm_size=5,
+        rng=MersenneTwister(9),
+        keep_history=false,
+    )
+    @test_throws ArgumentError swarm_trace_plot_data(tiny, no_history)
+    @test isnothing(IT3708Project3.swarm_best_path_plot_data(tiny, no_history))
 end
