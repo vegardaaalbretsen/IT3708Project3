@@ -158,7 +158,7 @@ function write_pareto_front(result, output_path::AbstractString)
     mkpath(dirname(output_path))
 
     open(output_path, "w") do io
-        println(io, "index,accuracy,num_selected,penalized_fitness")
+        println(io, "index,accuracy,num_selected,time,penalized_fitness")
         for i in eachindex(result.pareto_indices)
             println(
                 io,
@@ -166,6 +166,7 @@ function write_pareto_front(result, output_path::AbstractString)
                     result.pareto_indices[i], ",",
                     result.pareto_accuracy[i], ",",
                     result.pareto_num_selected[i], ",",
+                    result.pareto_time[i], ",",
                     result.pareto_penalized_fitness[i],
                 ),
             )
@@ -204,11 +205,12 @@ println("NSGA-II feature EA on `$(landscape.name)`")
 println("Iterations: $(result.iterations)")
 println("Population size: $(result.population_size)")
 println("Epsilon (reporting only): $(result.epsilon)")
+println("Threaded evaluation: $(result.threaded_evaluation)")
 println("Parameters: pc=$(result.crossover_probability), pm=$(result.mutation_probability)")
 println("Evaluations: $(result.evaluations)")
 println("Pareto front size: $(length(result.pareto_indices))")
 println(
-    "Best penalized: index=$(result.best_penalized_index), features=$(result.best_penalized_num_selected), " *
+    "Best penalized: index=$(result.best_penalized_index), features=$(result.best_penalized_num_selected), time=$(result.best_penalized_time), " *
     "accuracy=$(result.best_penalized_accuracy), penalized=$(result.best_penalized_fitness)",
 )
 
@@ -216,7 +218,7 @@ println("Pareto front (sorted by selected features, then accuracy):")
 max_rows = min(20, length(result.pareto_indices))
 for i in 1:max_rows
     println(
-        "  $(i): index=$(result.pareto_indices[i]), features=$(result.pareto_num_selected[i]), " *
+        "  $(i): index=$(result.pareto_indices[i]), features=$(result.pareto_num_selected[i]), time=$(result.pareto_time[i]), " *
         "accuracy=$(result.pareto_accuracy[i]), penalized=$(result.pareto_penalized_fitness[i])",
     )
 end

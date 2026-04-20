@@ -55,7 +55,7 @@ end
 
 function order_candidate_states(states)
     ordered = collect(states)
-    sort!(ordered; by = state -> (state.num_selected, -state.accuracy, state.index))
+    sort!(ordered; by = state -> (state.num_selected, state.time, -state.accuracy, state.index))
     return ordered
 end
 
@@ -81,7 +81,8 @@ function best_penalized_candidate_state(states)
         if state.penalized_fitness > best.penalized_fitness ||
            (state.penalized_fitness == best.penalized_fitness && state.num_selected < best.num_selected) ||
            (state.penalized_fitness == best.penalized_fitness && state.num_selected == best.num_selected && state.accuracy > best.accuracy) ||
-           (state.penalized_fitness == best.penalized_fitness && state.num_selected == best.num_selected && state.accuracy == best.accuracy && state.index < best.index)
+           (state.penalized_fitness == best.penalized_fitness && state.num_selected == best.num_selected && state.accuracy == best.accuracy && state.time < best.time) ||
+           (state.penalized_fitness == best.penalized_fitness && state.num_selected == best.num_selected && state.accuracy == best.accuracy && state.time == best.time && state.index < best.index)
             best = state
         end
     end
@@ -100,6 +101,7 @@ function run_single_objective_ea(landscape::Landscape;
                                  survivor_mode::Symbol = :elitist,
                                  elite::Integer = 4,
                                  log_every::Integer = 0,
+                                 threaded_evaluation::Bool = Threads.nthreads() > 1,
                                  rng::AbstractRNG = Random.default_rng(),
                                  keep_history::Bool = false)
     iterations >= 0 || throw(ArgumentError("iterations must be non-negative"))
@@ -157,6 +159,7 @@ function run_single_objective_ea(landscape::Landscape;
         objective = :max,
         log_every = Int(log_every),
         record_history = keep_history,
+        threaded_evaluation = threaded_evaluation,
     )
 
     best_ind, best_raw, worst_ind, worst_raw, history = GACore.run_ga(
@@ -216,6 +219,7 @@ function run_single_objective_ea(landscape::Landscape;
         survivor_mode = survivor_mode,
         elite = Int(elite),
         seed = seed,
+        threaded_evaluation = threaded_evaluation,
         initial_index = start.index,
         initial_accuracy = start.accuracy,
         initial_penalized_fitness = start.penalized_fitness,
@@ -256,6 +260,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
                               crossover_probability::Real = 0.95,
                               mutation_probability::Union{Nothing, Real} = nothing,
                               log_every::Integer = 0,
+                              threaded_evaluation::Bool = Threads.nthreads() > 1,
                               rng::AbstractRNG = Random.default_rng(),
                               keep_history::Bool = false)
     iterations >= 0 || throw(ArgumentError("iterations must be non-negative"))
@@ -287,7 +292,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
     objective_fn = function (ind::BitVector)
         index = decode_ga_individual(ind; allow_zero=landscape.allow_zero, repair_index=repair_index)
         state = candidate_state(landscape, index, epsilon)
-        return (state.accuracy, state.num_selected)
+        return (state.accuracy, state.num_selected, state.time)
     end
 
     seed = rand(rng, 1:typemax(Int))
@@ -308,6 +313,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
         seed = seed,
         log_every = Int(log_every),
         record_history = keep_history,
+        threaded_evaluation = threaded_evaluation,
     )
 
     nsga2_result = NSGA2Core.run_nsga2(
@@ -315,7 +321,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
         objective_fn,
         initial_population;
         params=params,
-        directions=(:max, :min),
+        directions=(:max, :min, :min),
     )
 
     final_population_indices = [
@@ -331,6 +337,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
     pareto_indices_history = nothing
     pareto_accuracy_history = nothing
     pareto_num_selected_history = nothing
+    pareto_time_history = nothing
     pareto_penalized_fitness_history = nothing
     front_size_history = nothing
     population_indices_history = nothing
@@ -352,6 +359,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
         pareto_indices_history = [[state.index for state in states] for states in history_states]
         pareto_accuracy_history = [[state.accuracy for state in states] for states in history_states]
         pareto_num_selected_history = [[state.num_selected for state in states] for states in history_states]
+        pareto_time_history = [[state.time for state in states] for states in history_states]
         pareto_penalized_fitness_history = [[state.penalized_fitness for state in states] for states in history_states]
         front_size_history = [length(states) for states in history_states]
 
@@ -398,25 +406,30 @@ function run_nsga2_feature_ea(landscape::Landscape;
         population_size = Int(population_size),
         crossover_probability = Float64(crossover_probability),
         mutation_probability = pm,
+        threaded_evaluation = threaded_evaluation,
         seed = seed,
         initial_index = isnothing(initial_index) ? nothing : Int(initial_index),
         evaluations = nsga2_result.evaluations,
         pareto_indices = [state.index for state in pareto_states],
         pareto_accuracy = [state.accuracy for state in pareto_states],
         pareto_num_selected = [state.num_selected for state in pareto_states],
+        pareto_time = [state.time for state in pareto_states],
         pareto_penalized_fitness = [state.penalized_fitness for state in pareto_states],
         final_population_indices = final_population_indices,
         final_population_accuracy = [state.accuracy for state in final_population_states],
         final_population_num_selected = [state.num_selected for state in final_population_states],
+        final_population_time = [state.time for state in final_population_states],
         final_population_ranks = nsga2_result.rank,
         final_population_crowding = nsga2_result.crowding,
         best_penalized_index = best_penalized.index,
         best_penalized_accuracy = best_penalized.accuracy,
         best_penalized_num_selected = best_penalized.num_selected,
+        best_penalized_time = best_penalized.time,
         best_penalized_fitness = best_penalized.penalized_fitness,
         pareto_indices_history = pareto_indices_history,
         pareto_accuracy_history = pareto_accuracy_history,
         pareto_num_selected_history = pareto_num_selected_history,
+        pareto_time_history = pareto_time_history,
         pareto_penalized_fitness_history = pareto_penalized_fitness_history,
         front_size_history = front_size_history,
         population_indices_history = population_indices_history,

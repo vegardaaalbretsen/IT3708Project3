@@ -248,13 +248,13 @@ end
 end
 
 @testset "NSGA-II core" begin
-    objectives = [(0.1, 0), (0.7, 1), (0.9, 1), (1.0, 2)]
+    objectives = [(0.1, 0, 0.0), (0.7, 1, 0.9), (0.7, 1, 0.2), (1.0, 2, 1.5)]
 
-    @test dominates((0.9, 1), (0.7, 1))
-    @test !dominates((0.7, 1), (0.9, 1))
-    @test !dominates((1.0, 2), (0.9, 1))
+    @test dominates((0.7, 1, 0.2), (0.7, 1, 0.9); directions=(:max, :min, :min))
+    @test !dominates((0.7, 1, 0.9), (0.7, 1, 0.2); directions=(:max, :min, :min))
+    @test !dominates((1.0, 2, 1.5), (0.7, 1, 0.2); directions=(:max, :min, :min))
 
-    fronts, rank = fast_nondominated_sort(objectives)
+    fronts, rank = fast_nondominated_sort(objectives; directions=(:max, :min, :min))
     @test sort(fronts[1]) == [1, 3, 4]
     @test fronts[2] == [2]
     @test rank == [1, 2, 1, 1]
@@ -271,7 +271,7 @@ end
         BitVector([true, true]),
     ]
 
-    selected = environmental_selection(initial_population, objectives, 3)
+    selected = environmental_selection(initial_population, objectives, 3; directions=(:max, :min, :min))
     @test length(selected.population) == 3
     @test sort(IT3708Project3.bitvector_to_index.(selected.population)) == [0, 2, 3]
     @test all(==(1), selected.rank)
@@ -290,6 +290,7 @@ end
         end,
         initial_population;
         params=params,
+        directions=(:max, :min, :min),
     )
 
     @test sort(core_result.fronts[1]) == [1, 3, 4]
@@ -303,11 +304,11 @@ end
 @testset "NSGA-II feature wrapper" begin
     tiny = Landscape(
         "tiny-nsga2",
-        1,
-        collect(0:1),
-        count_ones.(collect(0:1)),
-        [0.1, 0.9],
-        zeros(2),
+        2,
+        collect(0:3),
+        count_ones.(collect(0:3)),
+        [0.1, 0.85, 0.85, 1.0],
+        [0.0, 0.8, 0.1, 1.5],
         true,
     )
 
@@ -324,19 +325,24 @@ end
     @test result.algorithm == :nsga2_feature_ea
     @test result.population_size == 8
     @test result.crossover_probability == 0.85
-    @test sort(result.pareto_indices) == [0, 1]
-    @test result.pareto_num_selected == [0, 1]
-    @test result.pareto_accuracy == [0.1, 0.9]
-    @test result.pareto_penalized_fitness == [0.1, 0.7]
-    @test result.best_penalized_index == 1
-    @test isapprox(result.best_penalized_fitness, 0.7; atol=1e-12)
+    @test result.pareto_indices == [0, 2, 3]
+    @test result.pareto_num_selected == [0, 1, 2]
+    @test result.pareto_accuracy == [0.1, 0.85, 1.0]
+    @test result.pareto_time == [0.0, 0.1, 1.5]
+    @test all(isapprox.(result.pareto_penalized_fitness, [0.1, 0.65, 0.6]; atol=1e-12))
+    @test result.best_penalized_index == 2
+    @test isapprox(result.best_penalized_time, 0.1; atol=1e-12)
+    @test isapprox(result.best_penalized_fitness, 0.65; atol=1e-12)
     @test length(result.final_population_indices) == 8
+    @test length(result.final_population_time) == 8
     @test length(result.final_population_ranks) == 8
     @test length(result.final_population_crowding) == 8
     @test length(result.front_size_history) == 5
     @test length(result.pareto_indices_history) == 5
+    @test length(result.pareto_time_history) == 5
     @test result.front_size_history[end] == length(result.pareto_indices_history[end])
-    @test result.pareto_indices_history[end] == [0, 1]
+    @test result.pareto_indices_history[end] == [0, 2, 3]
+    @test result.pareto_time_history[end] == [0.0, 0.1, 1.5]
 
     high_penalty_result = run_nsga2_feature_ea(
         tiny;
@@ -346,7 +352,7 @@ end
         rng=MersenneTwister(7),
         keep_history=false,
     )
-    @test sort(high_penalty_result.pareto_indices) == [0, 1]
+    @test high_penalty_result.pareto_indices == [0, 2, 3]
     @test high_penalty_result.best_penalized_index == 0
 
     nonzero = Landscape(
@@ -355,7 +361,7 @@ end
         collect(1:3),
         count_ones.(collect(1:3)),
         [0.8, 0.9, 1.0],
-        zeros(3),
+        [0.8, 0.1, 1.4],
         false,
     )
     nonzero_result = run_nsga2_feature_ea(
@@ -376,8 +382,8 @@ end
         2,
         collect(0:3),
         count_ones.(collect(0:3)),
-        [0.1, 0.85, 0.9, 1.0],
-        zeros(4),
+        [0.1, 0.85, 0.85, 1.0],
+        [0.0, 0.8, 0.1, 1.5],
         true,
     )
 
@@ -395,11 +401,13 @@ end
     stn_plot_data = nsga2_search_trajectory_network_data(tiny, result)
 
     @test pareto_plot_data.indices == [0, 2, 3]
-    @test pareto_plot_data.accuracy == [0.1, 0.9, 1.0]
+    @test pareto_plot_data.accuracy == [0.1, 0.85, 1.0]
     @test pareto_plot_data.num_selected == [0, 1, 2]
+    @test pareto_plot_data.time == [0.0, 0.1, 1.5]
     @test trace_plot_data.iterations == collect(0:4)
     @test length(trace_plot_data.best_accuracy) == 5
     @test length(trace_plot_data.min_num_selected) == 5
+    @test length(trace_plot_data.min_time) == 5
     @test length(trace_plot_data.front_size) == 5
     @test all(>=(1), trace_plot_data.front_size)
     @test length(result.population_indices_history) == 5

@@ -1,6 +1,7 @@
 module NSGA2Core
 
 using Random
+using Base.Threads
 using ..GACore
 
 export NSGA2Params,
@@ -19,6 +20,7 @@ Base.@kwdef mutable struct NSGA2Params
     seed::Int = 42
     log_every::Int = 0
     record_history::Bool = true
+    threaded_evaluation::Bool = false
 end
 
 function dominates(a, b; directions::Tuple = (:max, :min))
@@ -238,6 +240,28 @@ function environmental_selection(population::Vector{BitVector},
     )
 end
 
+function evaluate_population(population::Vector{BitVector},
+                             objective_fn::Function;
+                             threaded_evaluation::Bool = false)
+    isempty(population) && return Any[]
+
+    first_value = objective_fn(population[1])
+    results = Vector{typeof(first_value)}(undef, length(population))
+    results[1] = first_value
+
+    if threaded_evaluation && nthreads() > 1 && length(population) > 1
+        Threads.@threads for i in 2:length(population)
+            results[i] = objective_fn(population[i])
+        end
+    else
+        for i in 2:length(population)
+            results[i] = objective_fn(population[i])
+        end
+    end
+
+    return results
+end
+
 function run_nsga2(nbits::Int,
                    objective_fn::Function;
                    params::NSGA2Params = NSGA2Params(),
@@ -279,7 +303,11 @@ function run_nsga2(nbits::Int,
     parent_b_position_hist = params.record_history ? Vector{Vector{Int}}() : nothing
 
     function evaluate_population(population::Vector{BitVector})
-        results = [objective_fn(ind) for ind in population]
+        results = NSGA2Core.evaluate_population(
+            population,
+            objective_fn;
+            threaded_evaluation=params.threaded_evaluation,
+        )
         evaluations += length(population)
         return results
     end
@@ -357,7 +385,14 @@ function run_nsga2(nbits::Int,
             front_objectives = isempty(fronts) ? [] : [objectives[index] for index in fronts[1]]
             best_accuracy = isempty(front_objectives) ? 0.0 : maximum(Float64(objective[1]) for objective in front_objectives)
             min_features = isempty(front_objectives) ? 0 : minimum(Int(objective[2]) for objective in front_objectives)
-            println("gen=$generation  front=$(isempty(fronts) ? 0 : length(fronts[1]))  best_accuracy=$(round(best_accuracy, digits=5))  min_features=$min_features")
+            log_message = "gen=$generation  front=$(isempty(fronts) ? 0 : length(fronts[1]))  best_accuracy=$(round(best_accuracy, digits=5))  min_features=$min_features"
+
+            if !isempty(front_objectives) && length(first(front_objectives)) >= 3
+                min_time = minimum(Float64(objective[3]) for objective in front_objectives)
+                log_message *= "  min_time=$(round(min_time, digits=5))"
+            end
+
+            println(log_message)
             flush(stdout)
         end
     end

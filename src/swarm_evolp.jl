@@ -1,5 +1,6 @@
 using EvoLP
 using Random
+using Base.Threads
 
 function bounded_swarm_coordinate(value)
     value = Float64(value)
@@ -49,20 +50,41 @@ end
 function initial_swarm_population(objective::Function,
                                   n_features::Integer,
                                   swarm_size::Integer;
-                                  rng::AbstractRNG)
+                                  rng::AbstractRNG,
+                                  threaded_evaluation::Bool = false)
     n = Int(n_features)
     swarm_size = Int(swarm_size)
     swarm_size > 0 || throw(ArgumentError("swarm_size must be positive"))
 
     population = Vector{EvoLP.Particle}(undef, swarm_size)
+    positions = [rand(rng, n) for _ in 1:swarm_size]
+    values = evaluate_swarm_positions(positions, objective; threaded_evaluation=threaded_evaluation)
 
     for i in 1:swarm_size
-        position = rand(rng, n)
-        value = objective(position)
+        position = positions[i]
+        value = values[i]
         population[i] = EvoLP.Particle(position, zeros(n), value, copy(position), value)
     end
 
     return population
+end
+
+function evaluate_swarm_positions(positions::AbstractVector{<:AbstractVector},
+                                  objective::Function;
+                                  threaded_evaluation::Bool = false)
+    values = Vector{Float64}(undef, length(positions))
+
+    if threaded_evaluation && nthreads() > 1 && length(positions) > 1
+        Threads.@threads for i in 1:length(positions)
+            values[i] = objective(positions[i])
+        end
+    else
+        for i in eachindex(positions)
+            values[i] = objective(positions[i])
+        end
+    end
+
+    return values
 end
 
 function particle_indices(population::AbstractVector{EvoLP.Particle},
@@ -83,7 +105,8 @@ function traced_swarm_pso(objective::Function,
                           rng::AbstractRNG,
                           n_features::Integer,
                           allow_zero::Bool,
-                          keep_history::Bool)
+                          keep_history::Bool,
+                          threaded_evaluation::Bool)
     d = length(population[1].x)
     x_best, y_best = copy(population[1].x_best), Inf
     particle_index_history = keep_history ? Vector{Vector{Int}}() : nothing
@@ -102,8 +125,10 @@ function traced_swarm_pso(objective::Function,
     # to support swarm trace plots, overlays, and animations.
     start_time = time()
 
-    for particle in population
-        particle.y = objective(particle.x)
+    initial_values = evaluate_swarm_positions([particle.x for particle in population], objective; threaded_evaluation=threaded_evaluation)
+    for i in eachindex(population)
+        particle = population[i]
+        particle.y = initial_values[i]
         particle.x_best[:] = particle.x
         particle.y_best = particle.y
 
@@ -116,23 +141,67 @@ function traced_swarm_pso(objective::Function,
     record_history!()
 
     @inbounds for _ in 1:Int(iterations)
-        for particle in population
-            r1 = rand(rng, d)
-            r2 = rand(rng, d)
-            particle.x += particle.v
-            particle.v = @fastmath Float64(w) * particle.v +
-                         Float64(c1) * r1 .* (particle.x_best - particle.x) +
-                         Float64(c2) * r2 .* (x_best - particle.x)
-            particle.y = objective(particle.x)
+        if threaded_evaluation && nthreads() > 1 && length(population) > 1
+            current_global_best = copy(x_best)
+            next_positions = Vector{Vector{Float64}}(undef, length(population))
+            next_velocities = Vector{Vector{Float64}}(undef, length(population))
 
-            if particle.y < y_best
-                x_best[:] = particle.x
-                y_best = particle.y
+            for i in eachindex(population)
+                particle = population[i]
+                r1 = rand(rng, d)
+                r2 = rand(rng, d)
+                position = particle.x .+ particle.v
+                velocity = @fastmath Float64(w) * particle.v +
+                           Float64(c1) * r1 .* (particle.x_best - position) +
+                           Float64(c2) * r2 .* (current_global_best - position)
+                next_positions[i] = position
+                next_velocities[i] = velocity
             end
 
-            if particle.y < particle.y_best
-                particle.x_best[:] = particle.x
-                particle.y_best = particle.y
+            next_values = evaluate_swarm_positions(next_positions, objective; threaded_evaluation=true)
+            iteration_best_y = y_best
+            iteration_best_x = copy(x_best)
+
+            for i in eachindex(population)
+                particle = population[i]
+                particle.x[:] = next_positions[i]
+                particle.v[:] = next_velocities[i]
+                particle.y = next_values[i]
+
+                if particle.y < particle.y_best
+                    particle.x_best[:] = particle.x
+                    particle.y_best = particle.y
+                end
+
+                if particle.y < iteration_best_y
+                    iteration_best_y = particle.y
+                    iteration_best_x = copy(particle.x)
+                end
+            end
+
+            if iteration_best_y < y_best
+                x_best[:] = iteration_best_x
+                y_best = iteration_best_y
+            end
+        else
+            for particle in population
+                r1 = rand(rng, d)
+                r2 = rand(rng, d)
+                particle.x += particle.v
+                particle.v = @fastmath Float64(w) * particle.v +
+                             Float64(c1) * r1 .* (particle.x_best - particle.x) +
+                             Float64(c2) * r2 .* (x_best - particle.x)
+                particle.y = objective(particle.x)
+
+                if particle.y < y_best
+                    x_best[:] = particle.x
+                    y_best = particle.y
+                end
+
+                if particle.y < particle.y_best
+                    particle.x_best[:] = particle.x
+                    particle.y_best = particle.y
+                end
             end
         end
 
@@ -165,6 +234,7 @@ function run_swarm_ea(landscape::Landscape;
                       w::Real = 0.7,
                       c1::Real = 1.4,
                       c2::Real = 1.4,
+                      threaded_evaluation::Bool = Threads.nthreads() > 1,
                       keep_history::Bool = false,
                       rng::AbstractRNG = Random.default_rng())
     iterations >= 0 || throw(ArgumentError("iterations must be non-negative"))
@@ -185,7 +255,13 @@ function run_swarm_ea(landscape::Landscape;
         return -candidate_state(landscape, index, epsilon).penalized_fitness
     end
 
-    population = initial_swarm_population(objective, landscape.num_features, swarm_size; rng=rng)
+    population = initial_swarm_population(
+        objective,
+        landscape.num_features,
+        swarm_size;
+        rng=rng,
+        threaded_evaluation=threaded_evaluation,
+    )
     traced = traced_swarm_pso(
         objective,
         population,
@@ -197,6 +273,7 @@ function run_swarm_ea(landscape::Landscape;
         n_features=landscape.num_features,
         allow_zero=landscape.allow_zero,
         keep_history=keep_history,
+        threaded_evaluation=threaded_evaluation,
     )
     raw_result = traced.raw_result
 
@@ -213,6 +290,7 @@ function run_swarm_ea(landscape::Landscape;
         w = Float64(w),
         c1 = Float64(c1),
         c2 = Float64(c2),
+        threaded_evaluation = threaded_evaluation,
         evaluations = EvoLP.f_calls(raw_result),
         runtime = EvoLP.runtime(raw_result),
         best_position = best_position,

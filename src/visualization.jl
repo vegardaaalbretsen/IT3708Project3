@@ -518,12 +518,14 @@ function nsga2_pareto_plot_data(result)
     pareto_indices = getproperty(result, :pareto_indices)
     pareto_accuracy = getproperty(result, :pareto_accuracy)
     pareto_num_selected = getproperty(result, :pareto_num_selected)
+    pareto_time = getproperty(result, :pareto_time)
     pareto_penalized_fitness = getproperty(result, :pareto_penalized_fitness)
 
     lengths = (
         length(pareto_indices),
         length(pareto_accuracy),
         length(pareto_num_selected),
+        length(pareto_time),
         length(pareto_penalized_fitness),
     )
     all(==(first(lengths)), lengths) ||
@@ -533,10 +535,12 @@ function nsga2_pareto_plot_data(result)
         indices = pareto_indices,
         accuracy = pareto_accuracy,
         num_selected = pareto_num_selected,
+        time = pareto_time,
         penalized_fitness = pareto_penalized_fitness,
         best_penalized_index = getproperty(result, :best_penalized_index),
         best_penalized_accuracy = getproperty(result, :best_penalized_accuracy),
         best_penalized_num_selected = getproperty(result, :best_penalized_num_selected),
+        best_penalized_time = getproperty(result, :best_penalized_time),
         best_penalized_fitness = getproperty(result, :best_penalized_fitness),
         epsilon = getproperty(result, :epsilon),
     )
@@ -630,16 +634,18 @@ end
 function nsga2_trace_plot_data(result)
     pareto_accuracy_history = getproperty(result, :pareto_accuracy_history)
     pareto_num_selected_history = getproperty(result, :pareto_num_selected_history)
+    pareto_time_history = getproperty(result, :pareto_time_history)
     pareto_penalized_fitness_history = getproperty(result, :pareto_penalized_fitness_history)
     front_size_history = getproperty(result, :front_size_history)
 
-    any(isnothing, (pareto_accuracy_history, pareto_num_selected_history, pareto_penalized_fitness_history, front_size_history)) &&
+    any(isnothing, (pareto_accuracy_history, pareto_num_selected_history, pareto_time_history, pareto_penalized_fitness_history, front_size_history)) &&
         throw(ArgumentError("NSGA-II history is missing. Run run_nsga2_feature_ea(...; keep_history=true) before plotting."))
 
     return (
         iterations = collect(0:(length(front_size_history) - 1)),
         best_accuracy = [maximum(history) for history in pareto_accuracy_history],
         min_num_selected = [minimum(history) for history in pareto_num_selected_history],
+        min_time = [minimum(history) for history in pareto_time_history],
         best_penalized_fitness = [maximum(history) for history in pareto_penalized_fitness_history],
         front_size = front_size_history,
     )
@@ -704,6 +710,22 @@ function plot_nsga2_trace(result;
         guidefontsize = 12,
     )
 
+    time_plt = plot(
+        plot_data.iterations,
+        plot_data.min_time;
+        linewidth = 3.0,
+        color = :firebrick3,
+        label = "Min evaluation time",
+        ylabel = "Time",
+        legend = :topright,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        tickfontsize = 10,
+        guidefontsize = 12,
+    )
+
     front_plt = plot(
         plot_data.iterations,
         plot_data.front_size;
@@ -725,8 +747,9 @@ function plot_nsga2_trace(result;
     return plot(
         accuracy_plt,
         features_plt,
+        time_plt,
         front_plt;
-        layout = grid(3, 1, heights = [0.4, 0.3, 0.3]),
+        layout = grid(4, 1, heights = [0.34, 0.22, 0.22, 0.22]),
         size = size,
         dpi = dpi,
         background_color = :white,
