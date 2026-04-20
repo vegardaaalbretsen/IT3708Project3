@@ -5,6 +5,7 @@ const PLOT_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "plots")
 const HBM_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "hbm")
 const FEATURE_COUNT_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "feature_count")
 const EA_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "ea")
+const STN_PLOT_EXPORT_DIR = joinpath(PLOT_EXPORT_DIR, "stn")
 
 const DATASETS = Dict(
     "breast-w" => (
@@ -35,4 +36,8 @@ end
 
 function default_ea_plot_path(name::AbstractString)
     return joinpath(EA_PLOT_EXPORT_DIR, "$(name).png")
+end
+
+function default_stn_plot_path(name::AbstractString)
+    return joinpath(STN_PLOT_EXPORT_DIR, "$(name).png")
 end

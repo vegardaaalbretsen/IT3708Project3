@@ -9,7 +9,8 @@ Small Julia project for parsing feature-selection landscapes, generating a synth
 - `src/parser.jl`: parse HDF5 datasets and write CSV lookup tables
 - `src/landscape.jl`: load CSV lookup tables and evaluate fitness/penalties
 - `src/general_ga.jl`: reusable single-objective GA core
-- `src/feature_main.jl`: adapts the GA core to the subset-index landscape
+- `src/nsga2_core.jl`: NSGA-II non-domination, crowding, and environmental selection
+- `src/feature_main.jl`: adapts the GA core and NSGA-II core to the subset-index landscape
 - `src/swarm_evolp.jl`: EvoLP-based PSO adapter for subset selection
 - `src/triangle.jl`: triangle fitness function and synthetic landscape generator
 - `src/hbm.jl`: HBM mapping, one-flip neighbors, and optima detection
@@ -98,6 +99,93 @@ result = run_single_objective_ea(
 
 save_ea_trace_plot(result, "exports/plots/ea/breast-w_ga_trace.png")
 save_fitness_by_feature_count_with_ea_plot(landscape, result, "exports/plots/ea/breast-w_ga_feature_count.png")
+```
+
+Run NSGA-II on a landscape:
+
+```bash
+julia --project=. run_nsga2.jl breast-w
+julia --project=. run_nsga2.jl breast-w 1000 0.01
+julia --project=. run_nsga2.jl triangle 500 0.0 42 0
+julia --project=. run_nsga2.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02
+julia --project=. run_nsga2.jl breast-w 500 0.01 --plot front
+julia --project=. run_nsga2.jl breast-w 500 0.01 --plot stn
+julia --project=. run_nsga2.jl breast-w 500 0.01 --plot both
+julia --project=. run_nsga2.jl breast-w 500 0.01 --plot all
+```
+
+`run_nsga2.jl` supports:
+
+- `--seed N`
+- `--initial-index I`
+- `--popsize N`
+- `--pc V`
+- `--pm V`
+- `--log-every N`
+- `--plot none|front|trace|stn|both|all`
+- `--output path`
+- `--plot-output path`
+
+The NSGA-II runner uses `run_nsga2_feature_ea(...)`, implemented in `src/feature_main.jl` on top of the non-dominated sorting and crowding operators in `src/nsga2_core.jl`.
+
+NSGA-II uses two objectives during selection:
+
+- maximize accuracy
+- minimize number of selected features
+
+`epsilon` is not used for Pareto selection. It is only used when reporting `pareto_penalized_fitness` and the single `best_penalized_*` summary fields.
+
+NSGA-II visualizations:
+
+- `plot_nsga2_pareto_front` and `save_nsga2_pareto_front_plot`
+- `plot_nsga2_trace` and `save_nsga2_trace_plot`
+- `plot_nsga2_search_trajectory_network` and `save_nsga2_search_trajectory_network_plot`
+
+The Pareto-front plot shows all subsets in accuracy-vs-feature-count space and highlights the final non-dominated set.
+
+The trace plot summarizes the search over time using:
+
+- maximum accuracy on the current front
+- minimum selected features on the current front
+- number of unique Pareto points
+
+The search trajectory network (STN) projects visited subsets into HBM space and overlays:
+
+- parent-to-child transitions aggregated across generations
+- visit frequency per subset
+- initial population
+- final population
+- final Pareto front
+- best penalized summary point
+
+The trace plot and STN require `keep_history=true`, which `run_nsga2.jl` enables automatically for `--plot trace`, `--plot stn`, `--plot both`, and `--plot all`.
+
+Example:
+
+```julia
+using IT3708Project3
+using Random
+
+landscape = load_landscape_key("breast-w")
+result = run_nsga2_feature_ea(
+    landscape;
+    iterations=500,
+    epsilon=0.01,
+    population_size=150,
+    crossover_probability=0.9,
+    mutation_probability=0.02,
+    rng=MersenneTwister(42),
+    keep_history=true,
+)
+
+result.pareto_indices
+result.pareto_accuracy
+result.pareto_num_selected
+result.best_penalized_index
+
+save_nsga2_pareto_front_plot(landscape, result, "exports/plots/ea/breast-w_nsga2_pareto.png")
+save_nsga2_trace_plot(result, "exports/plots/ea/breast-w_nsga2_trace.png")
+save_nsga2_search_trajectory_network_plot(landscape, result, "exports/plots/stn/breast-w_nsga2_stn.png")
 ```
 
 Run the swarm EA on a landscape:
