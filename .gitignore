@@ -31,3 +31,5 @@ plots/
 .DS_Store
 
 exports/csv/results/
+exports/csv/experiments/
+exports/plots/experiments/
