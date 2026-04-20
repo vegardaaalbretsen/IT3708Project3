@@ -18,6 +18,7 @@ For threaded evaluation in the GA, NSGA-II, and swarm runners, start Julia with 
 - `src/hbm.jl`: HBM mapping, one-flip neighbors, and optima detection
 - `src/visualization.jl`: HBM, feature-count, EA, and swarm plotting/animation
 - `run_experiments.jl`: batch experiment runner and summary CSV generator
+- `plot_experiment_fitness.jl`: plot experiment fitness/diversity curves from `generation_stats.csv`
 - `benchmark_threaded_eval.jl`: serial vs threaded evaluation benchmark for GA, NSGA-II, and swarm
 
 ## Commands
@@ -65,8 +66,26 @@ julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle
 `run_experiments.jl` writes three CSV files under `exports/csv/experiments/`:
 
 - `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon
-- `generation_stats.csv`: min, average, max, and best-so-far fitness per generation
+- `generation_stats.csv`: min, average, max, best-so-far fitness, and diversity entropy per generation
 - `summary.csv`: average and standard deviation of best fitness across runs
+
+Create plots from the experiment generation statistics:
+
+```bash
+julia --project=. plot_experiment_fitness.jl
+julia --project=. plot_experiment_fitness.jl --metric mean_fitness
+julia --project=. plot_experiment_fitness.jl --metric diversity_entropy
+```
+
+By default, `plot_experiment_fitness.jl` plots `best_so_far_fitness`. To plot diversity/entropy, explicitly pass `--metric diversity_entropy`.
+
+The plotting script writes one PNG per landscape and epsilon under `exports/plots/experiments/`. Useful metrics are:
+
+- `best_so_far_fitness`: main convergence plot
+- `mean_fitness`: average population quality over time
+- `diversity_entropy`: population diversity over time
+
+If you want diversity plots, rerun `run_experiments.jl` first so `generation_stats.csv` includes the `diversity_entropy` column.
 
 Run the single-objective GA on a landscape:
 
