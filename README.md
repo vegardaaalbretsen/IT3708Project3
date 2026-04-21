@@ -330,6 +330,16 @@ save_fitness_by_feature_count_swarm_animation(landscape, result, "exports/plots/
 save_hbm_swarm_animation(landscape, result, "exports/plots/hbm/breast-w_swarm_hbm.gif")
 ```
 
+For presentation-friendly population snapshot GIFs with every generation and a short pause on the final frame, use:
+
+```bash
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm ga --seed 1 --plot feature-count --fps 8 --final-hold 12
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm nsga2 --seed 1 --plot feature-count --fps 8 --final-hold 12
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm swarm --seed 1 --plot feature-count --fps 8 --final-hold 12
+```
+
+The `--final-hold` value is the number of extra copies of the last frame. At `--fps 8`, `--final-hold 12` gives roughly a 1.5 second pause at the end of the GIF. This workflow animates the grouped population snapshot for every generation, so it is usually the clearest option for presentations.
+
 The swarm trace plot includes:
 
 - best fitness per iteration

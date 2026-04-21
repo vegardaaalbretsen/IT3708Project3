@@ -226,12 +226,11 @@ function add_feature_count_totals!(plt, rows::Vector{SnapshotRow}, values)
     return plt
 end
 
-function save_feature_count_snapshot_plot(landscape::Landscape,
-                                          rows::Vector{SnapshotRow},
-                                          output_path::AbstractString;
-                                          algorithm::AbstractString,
-                                          seed::Integer,
-                                          epsilon::Real)
+function plot_feature_count_snapshot(landscape::Landscape,
+                                     rows::Vector{SnapshotRow};
+                                     algorithm::AbstractString,
+                                     seed::Integer,
+                                     epsilon::Real)
     values = penalized_fitness_values(landscape, epsilon)
     local_set = Set(local_optima(landscape; values=values))
     global_set = Set(global_optima(landscape; values=values))
@@ -260,17 +259,33 @@ function save_feature_count_snapshot_plot(landscape::Landscape,
     end
     add_feature_count_totals!(plt, rows, values)
 
+    return plt
+end
+
+function save_feature_count_snapshot_plot(landscape::Landscape,
+                                          rows::Vector{SnapshotRow},
+                                          output_path::AbstractString;
+                                          algorithm::AbstractString,
+                                          seed::Integer,
+                                          epsilon::Real)
+    plt = plot_feature_count_snapshot(
+        landscape,
+        rows;
+        algorithm=algorithm,
+        seed=seed,
+        epsilon=epsilon,
+    )
+
     mkpath(dirname(output_path))
     savefig(plt, output_path)
     return output_path
 end
 
-function save_hbm_snapshot_plot(landscape::Landscape,
-                                rows::Vector{SnapshotRow},
-                                output_path::AbstractString;
-                                algorithm::AbstractString,
-                                seed::Integer,
-                                epsilon::Real)
+function plot_hbm_snapshot(landscape::Landscape,
+                           rows::Vector{SnapshotRow};
+                           algorithm::AbstractString,
+                           seed::Integer,
+                           epsilon::Real)
     values = penalized_fitness_values(landscape, epsilon)
     nodes = build_hbm(landscape; values=values)
     node_lookup = Dict(node.index => node for node in nodes)
@@ -358,6 +373,23 @@ function save_hbm_snapshot_plot(landscape::Landscape,
             series_annotations=text.(count_labels(layer_rows), 12, :black),
         )
     end
+
+    return plt
+end
+
+function save_hbm_snapshot_plot(landscape::Landscape,
+                                rows::Vector{SnapshotRow},
+                                output_path::AbstractString;
+                                algorithm::AbstractString,
+                                seed::Integer,
+                                epsilon::Real)
+    plt = plot_hbm_snapshot(
+        landscape,
+        rows;
+        algorithm=algorithm,
+        seed=seed,
+        epsilon=epsilon,
+    )
 
     mkpath(dirname(output_path))
     savefig(plt, output_path)
