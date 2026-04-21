@@ -58,6 +58,23 @@ struct GenerationStat
     diversity_entropy::Float64
 end
 
+struct PopulationSnapshot
+    algorithm::Symbol
+    landscape::String
+    seed::Int
+    epsilon::Float64
+    snapshot_order::Int
+    snapshot_label::String
+    generation::Int
+    index::Int
+    bitstring::String
+    count::Int
+    num_selected::Int
+    accuracy::Float64
+    time::Float64
+    penalized_fitness::Float64
+end
+
 struct ExperimentSummary
     algorithm::Symbol
     landscape::String
@@ -100,18 +117,18 @@ function default_config(; seed_count::Int = 10,
         epsilons,
         collect(1:seed_count),
         String(output_dir),
-        500,
+        100,
         100,
         0.95,
         nothing,
         4,
         :elitist,
         4,
-        500,
+        100,
         100,
         0.95,
         nothing,
-        500,
+        100,
         40,
         0.7,
         1.4,
@@ -309,6 +326,91 @@ function make_generation_stat(algorithm::Symbol,
     )
 end
 
+function first_peak_generation(generation_rows::Vector{GenerationStat})
+    isempty(generation_rows) && return 0
+    peak_fitness = generation_rows[end].best_so_far_fitness
+
+    for row in generation_rows
+        if isapprox(row.best_so_far_fitness, peak_fitness; atol=1e-12, rtol=1e-12)
+            return row.generation
+        end
+    end
+
+    return generation_rows[end].generation
+end
+
+function snapshot_generation_plan(peak_generation::Integer, final_generation::Integer)
+    peak = max(Int(peak_generation), 0)
+    final = max(Int(final_generation), 0)
+    candidates = [
+        (0, "start"),
+        (floor(Int, peak / 3), "one_third"),
+        (floor(Int, 2 * peak / 3), "two_thirds"),
+        (peak, "peak"),
+        (final, "final"),
+    ]
+    selected = Tuple{Int, String}[]
+    seen = Set{Int}()
+
+    for (generation, label) in candidates
+        if !(generation in seen)
+            push!(selected, (generation, label))
+            push!(seen, generation)
+        end
+    end
+
+    return selected
+end
+
+function grouped_index_counts(indices::AbstractVector{<:Integer})
+    counts = Dict{Int, Int}()
+    for index in indices
+        counts[Int(index)] = get(counts, Int(index), 0) + 1
+    end
+    return [(index, counts[index]) for index in sort(collect(keys(counts)))]
+end
+
+function population_snapshot_rows(landscape::Landscape,
+                                  algorithm::Symbol,
+                                  epsilon::Float64,
+                                  seed::Int,
+                                  population_indices_history,
+                                  generation_rows::Vector{GenerationStat})
+    rows = PopulationSnapshot[]
+    peak_generation = first_peak_generation(generation_rows)
+    final_generation = length(population_indices_history) - 1
+
+    for (snapshot_order, (generation, label)) in enumerate(snapshot_generation_plan(peak_generation, final_generation))
+        position = generation + 1
+        position <= length(population_indices_history) || continue
+
+        for (index, count) in grouped_index_counts(population_indices_history[position])
+            state = IT3708Project3.candidate_state(landscape, index, epsilon)
+            push!(
+                rows,
+                PopulationSnapshot(
+                    algorithm,
+                    landscape.name,
+                    seed,
+                    epsilon,
+                    snapshot_order,
+                    label,
+                    generation,
+                    index,
+                    index_to_bitstring(index, landscape.num_features),
+                    count,
+                    state.num_selected,
+                    state.accuracy,
+                    state.time,
+                    state.penalized_fitness,
+                ),
+            )
+        end
+    end
+
+    return rows
+end
+
 function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int)
     rows = GenerationStat[]
 
@@ -445,8 +547,18 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
+        generation_rows = ga_generation_stats(landscape, result, epsilon, seed)
+        snapshot_rows = population_snapshot_rows(
+            landscape,
+            :ga,
+            epsilon,
+            seed,
+            result.population_indices_history,
+            generation_rows,
+        )
         return ga_run_row(landscape, result, epsilon, seed, runtime, config),
-               ga_generation_stats(landscape, result, epsilon, seed)
+               generation_rows,
+               snapshot_rows
     elseif algorithm == :nsga2
         result_ref = Ref{Any}()
         runtime = @elapsed begin
@@ -462,8 +574,18 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
+        generation_rows = nsga2_generation_stats(landscape, result, epsilon, seed)
+        snapshot_rows = population_snapshot_rows(
+            landscape,
+            :nsga2,
+            epsilon,
+            seed,
+            result.population_indices_history,
+            generation_rows,
+        )
         return nsga2_run_row(landscape, result, epsilon, seed, runtime, config),
-               nsga2_generation_stats(landscape, result, epsilon, seed)
+               generation_rows,
+               snapshot_rows
     elseif algorithm == :swarm
         result_ref = Ref{Any}()
         runtime = @elapsed begin
@@ -480,8 +602,18 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
+        generation_rows = swarm_generation_stats(landscape, result, epsilon, seed)
+        snapshot_rows = population_snapshot_rows(
+            landscape,
+            :swarm,
+            epsilon,
+            seed,
+            result.particle_index_history,
+            generation_rows,
+        )
         return swarm_run_row(landscape, result, epsilon, seed, runtime, config),
-               swarm_generation_stats(landscape, result, epsilon, seed)
+               generation_rows,
+               snapshot_rows
     end
 
     error("Unknown algorithm: $algorithm")
@@ -494,15 +626,18 @@ function run_repeated_experiments(landscape::Landscape,
                                   config::ExperimentConfig)
     run_rows = ExperimentRun[]
     generation_rows = GenerationStat[]
+    snapshot_rows = PopulationSnapshot[]
 
     for seed in seeds
         println("Running $(algorithm) on $(landscape.name), epsilon=$(epsilon), seed=$(seed)")
-        run_row, run_generation_rows = run_one_experiment(landscape, algorithm, epsilon, Int(seed), config)
+        run_row, run_generation_rows, run_snapshot_rows =
+            run_one_experiment(landscape, algorithm, epsilon, Int(seed), config)
         push!(run_rows, run_row)
         append!(generation_rows, run_generation_rows)
+        append!(snapshot_rows, run_snapshot_rows)
     end
 
-    return run_rows, generation_rows
+    return run_rows, generation_rows, snapshot_rows
 end
 
 function run_algorithm_suite(landscape::Landscape,
@@ -512,15 +647,17 @@ function run_algorithm_suite(landscape::Landscape,
                              config::ExperimentConfig)
     run_rows = ExperimentRun[]
     generation_rows = GenerationStat[]
+    snapshot_rows = PopulationSnapshot[]
 
     for algorithm in algorithms
-        algorithm_run_rows, algorithm_generation_rows =
+        algorithm_run_rows, algorithm_generation_rows, algorithm_snapshot_rows =
             run_repeated_experiments(landscape, algorithm, epsilon, seeds, config)
         append!(run_rows, algorithm_run_rows)
         append!(generation_rows, algorithm_generation_rows)
+        append!(snapshot_rows, algorithm_snapshot_rows)
     end
 
-    return run_rows, generation_rows
+    return run_rows, generation_rows, snapshot_rows
 end
 
 function sample_std(values)
@@ -605,6 +742,25 @@ function write_generation_stats_csv(rows::Vector{GenerationStat}, path::Abstract
     )
 end
 
+function write_population_snapshots_csv(rows::Vector{PopulationSnapshot}, path::AbstractString)
+    header = [
+        "algorithm", "landscape", "seed", "epsilon", "snapshot_order", "snapshot_label",
+        "generation", "index", "bitstring", "count", "num_selected", "accuracy", "time",
+        "penalized_fitness",
+    ]
+
+    return write_csv_rows(
+        path,
+        header,
+        rows,
+        row -> (
+            row.algorithm, row.landscape, row.seed, row.epsilon, row.snapshot_order,
+            row.snapshot_label, row.generation, row.index, row.bitstring, row.count,
+            row.num_selected, row.accuracy, row.time, row.penalized_fitness,
+        ),
+    )
+end
+
 function write_summary_csv(rows::Vector{ExperimentSummary}, path::AbstractString)
     header = [
         "algorithm", "landscape", "epsilon", "runs", "mean_best_fitness",
@@ -630,33 +786,38 @@ end
 function run_full_experiment_suite(config::ExperimentConfig)
     run_rows = ExperimentRun[]
     generation_rows = GenerationStat[]
+    snapshot_rows = PopulationSnapshot[]
 
     for landscape_key in config.landscape_keys
         println("Loading landscape $(landscape_key)")
         landscape = load_landscape_key(landscape_key)
 
         for epsilon in config.epsilons
-            suite_run_rows, suite_generation_rows =
+            suite_run_rows, suite_generation_rows, suite_snapshot_rows =
                 run_algorithm_suite(landscape, config.algorithms, epsilon, config.seeds, config)
             append!(run_rows, suite_run_rows)
             append!(generation_rows, suite_generation_rows)
+            append!(snapshot_rows, suite_snapshot_rows)
         end
     end
 
     summary_rows = summarize_runs(run_rows)
     raw_path = joinpath(config.output_dir, "raw_runs.csv")
     generation_path = joinpath(config.output_dir, "generation_stats.csv")
+    snapshot_path = joinpath(config.output_dir, "population_snapshots.csv")
     summary_path = joinpath(config.output_dir, "summary.csv")
 
     write_raw_runs_csv(run_rows, raw_path)
     write_generation_stats_csv(generation_rows, generation_path)
+    write_population_snapshots_csv(snapshot_rows, snapshot_path)
     write_summary_csv(summary_rows, summary_path)
 
     println("Saved raw run results to $(raw_path)")
     println("Saved generation statistics to $(generation_path)")
+    println("Saved population snapshots to $(snapshot_path)")
     println("Saved summary statistics to $(summary_path)")
 
-    return run_rows, generation_rows, summary_rows
+    return run_rows, generation_rows, snapshot_rows, summary_rows
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
