@@ -185,6 +185,13 @@ function run_single_objective_ea(landscape::Landscape;
         )
         for ind in history.best_so_far_ind_hist
     ] : nothing
+    population_indices_history = keep_history ? [
+        [
+            decode_ga_individual(ind; allow_zero=landscape.allow_zero, repair_index=repair_index)
+            for ind in population
+        ]
+        for population in history.population_hist
+    ] : nothing
 
     start = keep_history ? current_states[1] : candidate_state(
         landscape,
@@ -248,6 +255,7 @@ function run_single_objective_ea(landscape::Landscape;
         max_history = keep_history ? history.max_hist : nothing,
         min_history = keep_history ? history.min_hist : nothing,
         entropy_history = keep_history ? history.ent_hist : nothing,
+        population_indices_history = population_indices_history,
         raw_best = best_raw,
     )
 end
