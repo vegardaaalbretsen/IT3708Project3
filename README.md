@@ -95,7 +95,7 @@ julia --project=. run_ea.jl breast-w 10000 0.01
 julia --project=. run_ea.jl triangle 5000 0.0 42 0
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42
-julia --project=. run_ea.jl triangle 5000 0.1 --plot both --seed 42 --initial-index 0
+julia --project=. run_ea.jl triangle 5000 0.01 --plot both --seed 42 --initial-index 0
 julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2
 ```
 
