@@ -26,13 +26,16 @@ For threaded evaluation in the GA, NSGA-II, and swarm runners, start Julia with 
 
 Available landscape keys:
 
-- real datasets: `breast-w`, `credit-a`, `letter-r`
+- training datasets: `breast-w`, `credit-a`, `letter-r`
+- Step 6 test datasets: `zoo`, `hepatitis`
 - synthetic dataset: `triangle`
 
 Parse a real HDF5 dataset to CSV:
 
 ```bash
 julia --project=. parse_landscape.jl breast-w
+julia --project=. parse_landscape.jl zoo
+julia --project=. parse_landscape.jl hepatitis
 ```
 
 Create an HBM plot for a real dataset:
@@ -40,6 +43,7 @@ Create an HBM plot for a real dataset:
 ```bash
 julia --project=. plot_hbm.jl breast-w
 julia --project=. plot_hbm.jl breast-w 0.01
+julia --project=. plot_hbm.jl zoo 0.0
 ```
 
 Create an HBM plot for the synthetic triangle landscape:
@@ -53,8 +57,11 @@ Create a fitness-by-feature-count plot:
 ```bash
 julia --project=. plot_feature_count.jl breast-w
 julia --project=. plot_feature_count.jl breast-w 0.01
+julia --project=. plot_feature_count.jl hepatitis 0.0
 julia --project=. plot_feature_count.jl triangle
 ```
+
+Use the Step 6 test datasets manually with `epsilon=0.0`; they are loadable through the same dataset-key flow but are intentionally not part of the default `run_experiments.jl` training suite.
 
 Run batch experiments for the report:
 
@@ -112,6 +119,7 @@ Run the single-objective GA on a landscape:
 ```bash
 julia --project=. run_ea.jl breast-w
 julia --project=. run_ea.jl breast-w 10000 0.01
+julia --project=. run_ea.jl zoo 500 0.0 --seed 42
 julia --project=. run_ea.jl triangle 5000 0.0 42 0
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42
 julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42
@@ -169,6 +177,7 @@ Run NSGA-II on a landscape:
 ```bash
 julia --project=. run_nsga2.jl breast-w
 julia --project=. run_nsga2.jl breast-w 1000 0.01
+julia --project=. run_nsga2.jl hepatitis 500 0.0 --seed 42
 julia --project=. run_nsga2.jl triangle 500 0.0 42 0
 julia --project=. run_nsga2.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02
 julia --project=. run_nsga2.jl breast-w 500 0.01 --plot front
@@ -283,6 +292,7 @@ Run the swarm EA on a landscape:
 ```bash
 julia --project=. run_swarm.jl breast-w
 julia --project=. run_swarm.jl breast-w 500 0.01
+julia --project=. run_swarm.jl zoo 300 0.0 --seed 42
 julia --project=. run_swarm.jl triangle 300 0.0 --seed 42
 julia --project=. run_swarm.jl breast-w 500 0.01 --swarm-size 50 --w 0.7 --c1 1.4 --c2 1.4
 julia --project=. run_swarm.jl breast-w 500 0.01 --plot feature-count --seed 42
