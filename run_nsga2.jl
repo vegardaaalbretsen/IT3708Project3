@@ -154,6 +154,18 @@ function default_nsga2_stn_plot_name(dataset_key::AbstractString, epsilon::Real)
     return "$(dataset_key)_nsga2_stn_e$(epsilon_tag)"
 end
 
+function index_to_bitstring(index::Integer, n_features::Integer)
+    n = Int(n_features)
+    value = Int(index)
+    chars = Vector{Char}(undef, n)
+
+    for bit in 1:n
+        chars[n - bit + 1] = iszero(value & (1 << (bit - 1))) ? '0' : '1'
+    end
+
+    return String(chars)
+end
+
 function write_pareto_front(result, output_path::AbstractString)
     mkpath(dirname(output_path))
 
@@ -210,7 +222,7 @@ println("Parameters: pc=$(result.crossover_probability), pm=$(result.mutation_pr
 println("Evaluations: $(result.evaluations)")
 println("Pareto front size: $(length(result.pareto_indices))")
 println(
-    "Best penalized: index=$(result.best_penalized_index), features=$(result.best_penalized_num_selected), time=$(result.best_penalized_time), " *
+    "Best penalized: index=$(result.best_penalized_index), bitstring=$(index_to_bitstring(result.best_penalized_index, landscape.num_features)), features=$(result.best_penalized_num_selected), time=$(result.best_penalized_time), " *
     "accuracy=$(result.best_penalized_accuracy), penalized=$(result.best_penalized_fitness)",
 )
 
@@ -218,7 +230,7 @@ println("Pareto front (sorted by selected features, then accuracy):")
 max_rows = min(20, length(result.pareto_indices))
 for i in 1:max_rows
     println(
-        "  $(i): index=$(result.pareto_indices[i]), features=$(result.pareto_num_selected[i]), time=$(result.pareto_time[i]), " *
+        "  $(i): index=$(result.pareto_indices[i]), bitstring=$(index_to_bitstring(result.pareto_indices[i], landscape.num_features)), features=$(result.pareto_num_selected[i]), time=$(result.pareto_time[i]), " *
         "accuracy=$(result.pareto_accuracy[i]), penalized=$(result.pareto_penalized_fitness[i])",
     )
 end

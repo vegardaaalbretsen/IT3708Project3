@@ -150,6 +150,18 @@ function default_swarm_hbm_plot_name(dataset_key::AbstractString, epsilon::Real)
     return "$(dataset_key)_swarm_e$(epsilon_tag)"
 end
 
+function index_to_bitstring(index::Integer, n_features::Integer)
+    n = Int(n_features)
+    value = Int(index)
+    chars = Vector{Char}(undef, n)
+
+    for bit in 1:n
+        chars[n - bit + 1] = iszero(value & (1 << (bit - 1))) ? '0' : '1'
+    end
+
+    return String(chars)
+end
+
 if any(arg -> arg in ("-h", "--help"), ARGS)
     usage()
     exit()
@@ -179,7 +191,7 @@ println("Threaded evaluation: $(result.threaded_evaluation)")
 println("Parameters: w=$(result.w), c1=$(result.c1), c2=$(result.c2)")
 println("Evaluations: $(result.evaluations)")
 println("Runtime: $(round(result.runtime; digits=6)) seconds")
-println("Best: index=$(result.best_index), features=$(result.best_num_selected), accuracy=$(result.best_accuracy), penalized=$(result.best_penalized_fitness)")
+println("Best: index=$(result.best_index), bitstring=$(index_to_bitstring(result.best_index, landscape.num_features)), features=$(result.best_num_selected), accuracy=$(result.best_accuracy), penalized=$(result.best_penalized_fitness)")
 println("Best position: $(result.best_position)")
 
 values = cli.epsilon == 0 ? fitness_values(landscape) : penalized_fitness_values(landscape, cli.epsilon)
