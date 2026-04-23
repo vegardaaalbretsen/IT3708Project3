@@ -10,6 +10,8 @@ const METRIC_LABELS = Dict(
     "max_fitness" => "Maximum fitness",
     "best_so_far_fitness" => "Best-so-far fitness",
     "diversity_entropy" => "Normalized diversity entropy",
+    "global_optima_seen" => "Cumulative global optima seen",
+    "global_optima_fraction" => "Global optima coverage",
 )
 
 struct GenerationStatRow

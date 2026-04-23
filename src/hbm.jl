@@ -71,3 +71,53 @@ end
 function global_optima(landscape::Landscape; values = fitness_values(landscape))
     return global_optima(build_hbm(landscape; values=values))
 end
+
+function optima_coverage(indices::AbstractVector{<:Integer},
+                         optima_indices::AbstractVector{<:Integer})
+    optima_set = Set(Int.(optima_indices))
+    found_set = Set{Int}()
+
+    for index in indices
+        index = Int(index)
+        index in optima_set && push!(found_set, index)
+    end
+
+    found = sort!(collect(found_set))
+    total = length(optima_set)
+    count = length(found)
+    fraction = total == 0 ? 0.0 : count / total
+
+    return (
+        found = found,
+        count = count,
+        total = total,
+        fraction = Float64(fraction),
+    )
+end
+
+function optima_coverage_trace(index_history::AbstractVector,
+                               optima_indices::AbstractVector{<:Integer})
+    optima_set = Set(Int.(optima_indices))
+    seen = Set{Int}()
+    cumulative_counts = Int[]
+    total = length(optima_set)
+
+    for indices in index_history
+        for index in indices
+            index = Int(index)
+            index in optima_set && push!(seen, index)
+        end
+        push!(cumulative_counts, length(seen))
+    end
+
+    cumulative_fraction = total == 0 ?
+        fill(0.0, length(cumulative_counts)) :
+        Float64[count / total for count in cumulative_counts]
+
+    return (
+        found = sort!(collect(seen)),
+        cumulative_counts = cumulative_counts,
+        cumulative_fraction = cumulative_fraction,
+        total = total,
+    )
+end

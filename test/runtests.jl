@@ -81,6 +81,17 @@ end
     @test nodes[7] == HBMNode(7, 0.7, 3, 1)
     @test sort(local_optima(nodes, 3)) == [5, 7]
     @test sort(global_optima(nodes)) == [5, 7]
+    coverage = IT3708Project3.optima_coverage([1, 5, 5, 6, 7], [5, 7])
+    @test coverage.found == [5, 7]
+    @test coverage.count == 2
+    @test coverage.total == 2
+    @test isapprox(coverage.fraction, 1.0; atol=1e-12)
+
+    trace = IT3708Project3.optima_coverage_trace([[1, 5, 5], [2, 6], [7, 7]], [5, 7])
+    @test trace.found == [5, 7]
+    @test trace.cumulative_counts == [1, 1, 2]
+    @test all(isapprox.(trace.cumulative_fraction, [0.5, 0.5, 1.0]; atol=1e-12))
+    @test trace.total == 2
     @test IT3708Project3.top_local_optima(nodes, [5, 6, 7], [7]; max_count=1) == [5]
     @test plot_data.x == [0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0]
     @test plot_data.y == [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
