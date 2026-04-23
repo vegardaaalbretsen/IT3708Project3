@@ -76,8 +76,8 @@ julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle
 The default batch experiment settings match the report configuration:
 
 - GA: 100 iterations, population 100, `p_c = 0.95`, `p_m = 0.0625`, tournament size 4, elitist survival, elite 4
-- NSGA-II: 300 iterations, population 300, `p_c = 0.60`, `p_m = 0.1875`
-- Swarm: 300 iterations, population 100, `w = 0.95`, `c1 = 2.0`, `c2 = 0.4`
+- NSGA-II: 100 iterations, population 300, `p_c = 0.60`, `p_m = 0.1875`
+- Swarm: 100 iterations, population 100, `w = 0.95`, `c1 = 2.0`, `c2 = 0.4`
 
 Create plots from the experiment generation statistics:
 
