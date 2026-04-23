@@ -136,6 +136,25 @@ function safe_filename_part(value)
     return replace(text, r"[^A-Za-z0-9_.-]" => "_")
 end
 
+function display_metric_label(metric::AbstractString, landscape::AbstractString)
+    label = METRIC_LABELS[metric]
+
+    if landscape == "triangle" && occursin("fitness", metric)
+        label = replace(label, "Fitness" => "Objective value")
+        label = replace(label, "fitness" => "objective value")
+    end
+
+    return label
+end
+
+function plot_title(metric::AbstractString, landscape::AbstractString, epsilon::Real)
+    label = display_metric_label(metric, landscape)
+    if landscape == "triangle"
+        return "$(label) on $(landscape) (unpenalized)"
+    end
+    return "$(label) on $(landscape), epsilon=$(epsilon)"
+end
+
 function plot_metric_from_generation_stats(input_path::AbstractString,
                                            output_dir::AbstractString,
                                            metric::AbstractString)
@@ -147,10 +166,11 @@ function plot_metric_from_generation_stats(input_path::AbstractString,
     mkpath(output_dir)
 
     for (landscape, epsilon) in plot_groups
+        metric_label = display_metric_label(metric, landscape)
         plt = plot(
             xlabel = "Generation",
-            ylabel = METRIC_LABELS[metric],
-            title = "$(METRIC_LABELS[metric]) on $(landscape), epsilon=$(epsilon)",
+            ylabel = metric_label,
+            title = plot_title(metric, landscape, epsilon),
             legend = :bottomright,
             linewidth = 3,
             size = (1100, 700),
@@ -167,14 +187,14 @@ function plot_metric_from_generation_stats(input_path::AbstractString,
             plot!(plt, generations, values; label = algorithm)
         end
 
-        filename = join(
-            [
-                safe_filename_part(landscape),
-                "epsilon-$(safe_filename_part(epsilon))",
-                safe_filename_part(metric),
-            ],
-            "_",
-        ) * ".png"
+        filename_parts = [safe_filename_part(landscape)]
+        if landscape == "triangle"
+            push!(filename_parts, "unpenalized")
+        else
+            push!(filename_parts, "epsilon-$(safe_filename_part(epsilon))")
+        end
+        push!(filename_parts, safe_filename_part(metric))
+        filename = join(filename_parts, "_") * ".png"
         output_path = joinpath(output_dir, filename)
         savefig(plt, output_path)
         push!(saved_paths, output_path)

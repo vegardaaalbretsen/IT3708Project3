@@ -304,6 +304,10 @@ function parameters_string(algorithm::Symbol, config::ExperimentConfig)
     error("Unknown algorithm: $algorithm")
 end
 
+function experiment_epsilons(landscape::Landscape, epsilons::AbstractVector{<:Real})
+    return landscape.name == "triangle" ? [0.0] : Float64.(epsilons)
+end
+
 function make_generation_stat(algorithm::Symbol,
                               landscape::Landscape,
                               seed::Int,
@@ -792,7 +796,7 @@ function run_full_experiment_suite(config::ExperimentConfig)
         println("Loading landscape $(landscape_key)")
         landscape = load_landscape_key(landscape_key)
 
-        for epsilon in config.epsilons
+        for epsilon in experiment_epsilons(landscape, config.epsilons)
             suite_run_rows, suite_generation_rows, suite_snapshot_rows =
                 run_algorithm_suite(landscape, config.algorithms, epsilon, config.seeds, config)
             append!(run_rows, suite_run_rows)

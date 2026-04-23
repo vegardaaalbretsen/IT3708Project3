@@ -165,27 +165,27 @@ function plot_hbm(nodes::AbstractVector{HBMNode},
         bottom_margin = 0Plots.mm,
     )
 
-    scatter!(
-        info_plt,
-        [2.0],
-        [2.0];
-        ms = 26,
-        markershape = :circle,
-        markercolor = :dodgerblue3,
-        markerstrokewidth = 0,
-        label = "Local optimum",
-    )
+        scatter!(
+            info_plt,
+            [2.0],
+            [2.0];
+            ms = 26,
+            markershape = :circle,
+            markercolor = :dodgerblue3,
+            markerstrokewidth = 0,
+            label = "Local optima",
+        )
 
-    scatter!(
-        info_plt,
-        [2.0],
-        [2.0];
-        ms = 26,
-        markershape = :circle,
-        markercolor = :red2,
-        markerstrokewidth = 0,
-        label = "Global optimum",
-    )
+        scatter!(
+            info_plt,
+            [2.0],
+            [2.0];
+            ms = 26,
+            markershape = :circle,
+            markercolor = :red2,
+            markerstrokewidth = 0,
+            label = "Global optima",
+        )
 
     label_plt = plot(
         xlim = (0, 1),

@@ -64,6 +64,8 @@ end
     @test all(==(0.0), landscape.time)
     @test IT3708Project3.fitness(landscape, 0) == 0.0
     @test IT3708Project3.fitness(landscape, 15) == 4.0
+    @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.25)[16], 4.0; atol=1e-12)
+    @test isapprox(IT3708Project3.candidate_state(landscape, 15, 0.25).penalized_fitness, 4.0; atol=1e-12)
 end
 
 @testset "HBM" begin

@@ -33,3 +33,5 @@ plots/
 exports/csv/results/
 exports/csv/experiments*/
 exports/plots/experiments*/
+
+data/test_data/10-hepatitis_lr_F.h5

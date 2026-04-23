@@ -52,7 +52,13 @@ function penalized_fitness(accuracy::Real, num_features::Integer, epsilon::Real)
     return Float64(accuracy) - penalty(num_features, epsilon)
 end
 
+function effective_epsilon(landscape::Landscape, epsilon::Real)
+    0 <= epsilon <= 1 || throw(ArgumentError("epsilon must be between 0 and 1"))
+    return landscape.name == "triangle" ? 0.0 : Float64(epsilon)
+end
+
 function penalized_fitness_values(landscape::Landscape, epsilon::Real)
+    epsilon = effective_epsilon(landscape, epsilon)
     return [
         penalized_fitness(accuracy, num_selected, epsilon)
         for (accuracy, num_selected) in zip(landscape.accuracy, landscape.num_selected)
@@ -79,6 +85,7 @@ function candidate_state(landscape::Landscape, index::Integer, epsilon::Real)
     accuracy = landscape.accuracy[position]
     time = landscape.time[position]
     num_selected = landscape.num_selected[position]
+    epsilon = effective_epsilon(landscape, epsilon)
     objective = penalized_fitness(accuracy, num_selected, epsilon)
 
     return (

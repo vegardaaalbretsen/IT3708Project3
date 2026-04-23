@@ -187,7 +187,7 @@ function snapshot_title(kind::AbstractString,
                         seed::Integer,
                         epsilon::Real,
                         generation::Integer)
-    return "$(landscape) $(algorithm) $(kind) snapshot, seed=$(seed), epsilon=$(epsilon), generation=$(generation)"
+    return "$(landscape) $(algorithm) $(kind), gen $(generation)"
 end
 
 function count_labels(rows::Vector{SnapshotRow})
@@ -203,7 +203,7 @@ function population_layers(rows::Vector{SnapshotRow}, local_set::Set, global_set
     local_rows = [row for row in rows if row.index in local_set && !(row.index in global_set)]
     global_rows = [row for row in rows if row.index in global_set]
     return (
-        (other_rows, :orange, "Population on other subsets"),
+        (other_rows, :orange, "Population elsewhere"),
         (local_rows, :dodgerblue3, "Population on local optima"),
         (global_rows, :red2, "Population on global optima"),
     )
@@ -220,7 +220,7 @@ function add_feature_count_totals!(plt, rows::Vector{SnapshotRow}, values)
     y = min_value + 0.04 * max(max_value - min_value, eps())
 
     for feature_count in sort(collect(keys(totals)))
-        annotate!(plt, feature_count, y, text("n=$(totals[feature_count])", 8, :black))
+        annotate!(plt, feature_count, y, text("n=$(totals[feature_count])", 12, :black))
     end
 
     return plt
@@ -241,6 +241,21 @@ function plot_feature_count_snapshot(landscape::Landscape,
         title=snapshot_title("feature-count", landscape.name, algorithm, seed, epsilon, generation),
         fitness_label="Penalized fitness",
     )
+    plot!(
+        plt;
+        legend=:outertop,
+        legend_column=3,
+        size=(1500, 980),
+        dpi=300,
+        titlefont=font(18),
+        guidefont=font(15),
+        tickfont=font(13),
+        legendfont=font(13),
+        left_margin=18Plots.mm,
+        right_margin=8Plots.mm,
+        top_margin=8Plots.mm,
+        bottom_margin=16Plots.mm,
+    )
 
     for (layer_rows, color, label) in population_layers(rows, local_set, global_set)
         isempty(layer_rows) && continue
@@ -254,7 +269,7 @@ function plot_feature_count_snapshot(landscape::Landscape,
             markerstrokewidth=1.2,
             alpha=0.9,
             label=label,
-            series_annotations=text.(count_labels(layer_rows), 8, :black),
+            series_annotations=text.(count_labels(layer_rows), 12, :black),
         )
     end
     add_feature_count_totals!(plt, rows, values)
@@ -306,11 +321,12 @@ function plot_hbm_snapshot(landscape::Landscape,
         ylabel="Second half of bitstring",
         title=snapshot_title("HBM", landscape.name, algorithm, seed, epsilon, generation),
         label="",
-        legend=:topright,
+        legend=:outertop,
+        legend_column=2,
         colorbar=:right,
         colorbar_title="Penalized fitness",
         aspect_ratio=:equal,
-        size=(2200, 1400),
+        size=(1900, 1200),
         dpi=300,
         xticks=([0.0, Float64(x_max)], ["2^0 - 1", "2^$(x_bits) - 1"]),
         yticks=([0.0, Float64(y_max)], ["2^0 - 1", "2^$(y_bits) - 1"]),
@@ -319,6 +335,16 @@ function plot_hbm_snapshot(landscape::Landscape,
         grid=true,
         gridalpha=0.18,
         background_color=:white,
+        titlefont=font(20),
+        guidefont=font(15),
+        tickfont=font(13),
+        legendfont=font(13),
+        colorbar_titlefont=font(15),
+        colorbar_tickfont=font(13),
+        left_margin=14Plots.mm,
+        right_margin=10Plots.mm,
+        top_margin=10Plots.mm,
+        bottom_margin=8Plots.mm,
     )
 
     local_indices = local_optima(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
@@ -370,7 +396,7 @@ function plot_hbm_snapshot(landscape::Landscape,
             markerstrokewidth=2.0,
             alpha=0.9,
             label=label,
-            series_annotations=text.(count_labels(layer_rows), 12, :black),
+            series_annotations=text.(count_labels(layer_rows), 13, :black),
         )
     end
 
