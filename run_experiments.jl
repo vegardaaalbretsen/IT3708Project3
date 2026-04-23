@@ -45,6 +45,7 @@ struct ExperimentRun
     global_optima_seen::Int
     total_global_optima::Int
     global_optima_fraction::Float64
+    global_optimum_fitness::Float64
     parameters::String
 end
 
@@ -96,6 +97,7 @@ struct ExperimentSummary
     mean_global_optima_seen::Float64
     max_global_optima_seen::Int
     mean_global_optima_fraction::Float64
+    global_optimum_fitness::Float64
     best_index::Int
     best_bitstring::String
     best_accuracy::Float64
@@ -129,19 +131,19 @@ function default_config(; seed_count::Int = 10,
         100,
         100,
         0.95,
-        nothing,
+        0.0625,
         4,
         :elitist,
         4,
         100,
+        300,
+        0.60,
+        0.1875,
+        100,
         100,
         0.95,
-        nothing,
-        100,
-        40,
-        0.7,
-        1.4,
-        1.4,
+        2.0,
+        0.4,
     )
 end
 
@@ -282,7 +284,7 @@ end
 
 function parameters_string(algorithm::Symbol, config::ExperimentConfig)
     if algorithm == :ga
-        pm = isnothing(config.ga_mutation_probability) ? "1/n" : string(config.ga_mutation_probability)
+        pm = isnothing(config.ga_mutation_probability) ? "0.0625" : string(config.ga_mutation_probability)
         return join((
             "iterations=$(config.ga_iterations)",
             "population_size=$(config.ga_population_size)",
@@ -293,7 +295,7 @@ function parameters_string(algorithm::Symbol, config::ExperimentConfig)
             "elite=$(config.ga_elite)",
         ), ';')
     elseif algorithm == :nsga2
-        pm = isnothing(config.nsga2_mutation_probability) ? "1/n" : string(config.nsga2_mutation_probability)
+        pm = isnothing(config.nsga2_mutation_probability) ? "0.1875" : string(config.nsga2_mutation_probability)
         return join((
             "iterations=$(config.nsga2_iterations)",
             "population_size=$(config.nsga2_population_size)",
@@ -530,6 +532,7 @@ function ga_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, r
     state = IT3708Project3.candidate_state(landscape, result.best_index, epsilon)
     evaluations = config.ga_population_size * (1 + 2 * config.ga_iterations)
     global_optima_seen, global_optima_fraction = final_optima_progress(optima_trace)
+    global_optimum_fitness = maximum(IT3708Project3.penalized_fitness_values(landscape, epsilon))
 
     return ExperimentRun(
         :ga,
@@ -546,6 +549,7 @@ function ga_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, r
         global_optima_seen,
         optima_trace.total,
         global_optima_fraction,
+        global_optimum_fitness,
         parameters_string(:ga, config),
     )
 end

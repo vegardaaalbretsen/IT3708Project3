@@ -775,6 +775,8 @@ end
 
 function nsga2_search_trajectory_network_data(landscape::Landscape,
                                              result;
+                                             first_generations::Union{Nothing, Integer} = nothing,
+                                             last_generations::Union{Nothing, Integer} = nothing,
                                              values = penalized_fitness_values(landscape, getproperty(result, :epsilon)))
     population_indices_history = getproperty(result, :population_indices_history)
     transition_edges_history = getproperty(result, :transition_edges_history)
@@ -784,6 +786,24 @@ function nsga2_search_trajectory_network_data(landscape::Landscape,
 
     isempty(population_indices_history) &&
         throw(ArgumentError("NSGA-II population history must not be empty"))
+
+    if !isnothing(first_generations) && !isnothing(last_generations)
+        throw(ArgumentError("first_generations and last_generations cannot both be set"))
+    end
+
+    if !isnothing(first_generations)
+        first_generations > 0 || throw(ArgumentError("first_generations must be positive"))
+        population_stop = min(length(population_indices_history), Int(first_generations))
+        transition_stop = min(length(transition_edges_history), Int(first_generations))
+        population_indices_history = population_indices_history[1:population_stop]
+        transition_edges_history = transition_edges_history[1:transition_stop]
+    elseif !isnothing(last_generations)
+        last_generations > 0 || throw(ArgumentError("last_generations must be positive"))
+        population_start = max(1, length(population_indices_history) - Int(last_generations) + 1)
+        transition_start = max(1, length(transition_edges_history) - Int(last_generations) + 1)
+        population_indices_history = population_indices_history[population_start:end]
+        transition_edges_history = transition_edges_history[transition_start:end]
+    end
 
     nodes = build_hbm(landscape; values=values)
     node_lookup = Dict(node.index => node for node in nodes)
@@ -828,6 +848,10 @@ function nsga2_search_trajectory_network_data(landscape::Landscape,
         end_indices = end_indices,
         end_counts = end_counts,
         edge_counts = edge_counts,
+        start_label = isnothing(last_generations) ? "Initial population" : "Window start population",
+        end_label = isnothing(first_generations) ? "Final population" : "Window end population",
+        pareto_label = isnothing(first_generations) && isnothing(last_generations) ? "Final Pareto front" : "Final Pareto front (full run)",
+        best_label = isnothing(first_generations) && isnothing(last_generations) ? "Best penalized summary" : "Best penalized summary (full run)",
         pareto_indices = getproperty(result, :pareto_indices),
         best_penalized_index = getproperty(result, :best_penalized_index),
     )
@@ -835,12 +859,20 @@ end
 
 function plot_nsga2_search_trajectory_network(landscape::Landscape,
                                               result;
+                                              first_generations::Union{Nothing, Integer} = nothing,
+                                              last_generations::Union{Nothing, Integer} = nothing,
                                               values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
                                               title::AbstractString = "$(landscape.name) NSGA-II Search Trajectory Network",
                                               fitness_label::AbstractString = "Penalized fitness",
                                               size::Tuple{Int, Int} = (2200, 1400),
                                               dpi::Int = 300)
-    network_data = nsga2_search_trajectory_network_data(landscape, result; values=values)
+    network_data = nsga2_search_trajectory_network_data(
+        landscape,
+        result;
+        first_generations=first_generations,
+        last_generations=last_generations,
+        values=values,
+    )
     nodes = network_data.nodes
     plot_data = hbm_plot_data(nodes, landscape.num_features; allow_zero=landscape.allow_zero)
     isempty(nodes) && throw(ArgumentError("nodes must not be empty"))
@@ -944,7 +976,7 @@ function plot_nsga2_search_trajectory_network(landscape::Landscape,
             markercolor = :white,
             markerstrokecolor = :black,
             markerstrokewidth = 1.4,
-            label = "Initial population",
+            label = network_data.start_label,
         )
     end
 
@@ -963,7 +995,7 @@ function plot_nsga2_search_trajectory_network(landscape::Landscape,
             markershape = :utriangle,
             markercolor = :forestgreen,
             markerstrokewidth = 0,
-            label = "Final population",
+            label = network_data.end_label,
         )
     end
 
@@ -978,7 +1010,7 @@ function plot_nsga2_search_trajectory_network(landscape::Landscape,
             markercolor = :darkorange3,
             markerstrokecolor = :black,
             markerstrokewidth = 0.7,
-            label = "Final Pareto front",
+            label = network_data.pareto_label,
         )
     end
 
@@ -992,7 +1024,7 @@ function plot_nsga2_search_trajectory_network(landscape::Landscape,
         markercolor = :gold3,
         markerstrokecolor = :black,
         markerstrokewidth = 0.9,
-        label = "Best penalized summary",
+        label = network_data.best_label,
     )
 
     return plt
@@ -1001,6 +1033,8 @@ end
 function save_nsga2_search_trajectory_network_plot(landscape::Landscape,
                                                    result,
                                                    output_path::AbstractString;
+                                                   first_generations::Union{Nothing, Integer} = nothing,
+                                                   last_generations::Union{Nothing, Integer} = nothing,
                                                    values = penalized_fitness_values(landscape, getproperty(result, :epsilon)),
                                                    title::AbstractString = "$(landscape.name) NSGA-II Search Trajectory Network",
                                                    fitness_label::AbstractString = "Penalized fitness",
@@ -1009,6 +1043,8 @@ function save_nsga2_search_trajectory_network_plot(landscape::Landscape,
     plt = plot_nsga2_search_trajectory_network(
         landscape,
         result;
+        first_generations=first_generations,
+        last_generations=last_generations,
         values=values,
         title=title,
         fitness_label=fitness_label,

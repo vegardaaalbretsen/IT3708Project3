@@ -3,18 +3,22 @@ using Random
 
 function usage()
     println("Usage: julia --project=. run_nsga2.jl [dataset-key|triangle] [iterations] [epsilon] [seed] [initial-index] [output-path]")
-    println("       julia --project=. run_nsga2.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--log-every N] [--plot none|front|trace|stn|both|all] [--output path] [--plot-output path]")
+    println("       julia --project=. run_nsga2.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--log-every N] [--plot none|front|trace|stn|both|all] [--stn-first N] [--stn-last N] [--output path] [--plot-output path]")
     println("")
     println("Examples:")
     println("  julia --project=. run_nsga2.jl breast-w")
-    println("  julia --project=. run_nsga2.jl breast-w 1000 0.01")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01")
     println("  julia --project=. run_nsga2.jl triangle 500 0.0 42 0")
-    println("  julia --project=. run_nsga2.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02")
-    println("  julia --project=. run_nsga2.jl breast-w 500 0.01 --plot front")
-    println("  julia --project=. run_nsga2.jl breast-w 500 0.01 --plot stn")
-    println("  julia --project=. run_nsga2.jl breast-w 500 0.01 --plot both")
-    println("  julia --project=. run_nsga2.jl breast-w 500 0.01 --plot all")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --popsize 300 --pc 0.6 --pm 0.1875")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot front")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot stn")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot stn --stn-first 5")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot stn --stn-last 100")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot both")
+    println("  julia --project=. run_nsga2.jl breast-w 300 0.01 --plot all")
 end
+
+default_cli_epsilon(dataset_key::AbstractString) = dataset_key == "triangle" ? 0.0 : 0.01
 
 function parse_cli(args::Vector{String})
     positional = String[]
@@ -25,6 +29,8 @@ function parse_cli(args::Vector{String})
     mutation_probability = nothing
     log_every = nothing
     plot_kind = nothing
+    stn_first_generations = nothing
+    stn_last_generations = nothing
     output_path = nothing
     plot_output_path = nothing
     i = 1
@@ -60,6 +66,16 @@ function parse_cli(args::Vector{String})
             i < length(args) || error("Missing value for --plot")
             plot_kind = args[i + 1]
             i += 2
+        elseif arg == "--stn-first"
+            i < length(args) || error("Missing value for --stn-first")
+            stn_first_generations = parse(Int, args[i + 1])
+            stn_first_generations > 0 || error("--stn-first must be positive")
+            i += 2
+        elseif arg == "--stn-last"
+            i < length(args) || error("Missing value for --stn-last")
+            stn_last_generations = parse(Int, args[i + 1])
+            stn_last_generations > 0 || error("--stn-last must be positive")
+            i += 2
         elseif arg == "--output"
             i < length(args) || error("Missing value for --output")
             output_path = args[i + 1]
@@ -79,8 +95,8 @@ function parse_cli(args::Vector{String})
     length(positional) <= 6 || error("Too many positional arguments")
 
     dataset_key = length(positional) >= 1 ? positional[1] : "breast-w"
-    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 1000
-    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : 0.0
+    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 300
+    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : default_cli_epsilon(dataset_key)
 
     if isnothing(seed) && length(positional) >= 4
         seed = parse(Int, positional[4])
@@ -102,17 +118,23 @@ function parse_cli(args::Vector{String})
         error("--plot-output can only be used with plot kinds 'front', 'trace', or 'stn'")
     end
 
+    if !isnothing(stn_first_generations) && !isnothing(stn_last_generations)
+        error("--stn-first and --stn-last cannot be used together")
+    end
+
     return (
         dataset_key = dataset_key,
         iterations = iterations,
         epsilon = epsilon,
         seed = seed,
         initial_index = initial_index,
-        population_size = isnothing(population_size) ? 100 : population_size,
-        crossover_probability = isnothing(crossover_probability) ? 0.95 : crossover_probability,
-        mutation_probability = mutation_probability,
+        population_size = isnothing(population_size) ? 300 : population_size,
+        crossover_probability = isnothing(crossover_probability) ? 0.60 : crossover_probability,
+        mutation_probability = isnothing(mutation_probability) ? 0.1875 : mutation_probability,
         log_every = isnothing(log_every) ? 0 : log_every,
         plot_kind = plot_kind,
+        stn_first_generations = stn_first_generations,
+        stn_last_generations = stn_last_generations,
         output_path = output_path,
         plot_output_path = plot_output_path,
     )
@@ -152,6 +174,27 @@ function default_nsga2_stn_plot_name(dataset_key::AbstractString, epsilon::Real)
 
     epsilon_tag = replace(string(epsilon), "." => "p")
     return "$(dataset_key)_nsga2_stn_e$(epsilon_tag)"
+end
+
+function nsga2_stn_title(dataset_key::AbstractString,
+                         epsilon::Real,
+                         stn_first_generations,
+                         stn_last_generations)
+    if isnothing(stn_first_generations) && isnothing(stn_last_generations)
+        return epsilon == 0 ?
+            "$(dataset_key) NSGA-II search trajectory network" :
+            "$(dataset_key) NSGA-II search trajectory network (epsilon=$(epsilon), reporting only)"
+    end
+
+    if !isnothing(stn_first_generations)
+        return epsilon == 0 ?
+            "$(dataset_key) NSGA-II search trajectory network (first $(stn_first_generations) generations)" :
+            "$(dataset_key) NSGA-II search trajectory network (epsilon=$(epsilon), first $(stn_first_generations) generations)"
+    end
+
+    return epsilon == 0 ?
+        "$(dataset_key) NSGA-II search trajectory network (last $(stn_last_generations) generations)" :
+        "$(dataset_key) NSGA-II search trajectory network (epsilon=$(epsilon), last $(stn_last_generations) generations)"
 end
 
 function write_pareto_front(result, output_path::AbstractString)
@@ -273,18 +316,29 @@ if cli.plot_kind in ("stn", "all")
     stn_output = if cli.plot_kind == "stn" && !isnothing(cli.plot_output_path)
         cli.plot_output_path
     else
-        default_stn_plot_path(default_nsga2_stn_plot_name(cli.dataset_key, cli.epsilon))
+        base_name = default_nsga2_stn_plot_name(cli.dataset_key, cli.epsilon)
+        if !isnothing(cli.stn_first_generations)
+            base_name *= "_first$(cli.stn_first_generations)"
+        elseif !isnothing(cli.stn_last_generations)
+            base_name *= "_last$(cli.stn_last_generations)"
+        end
+        default_stn_plot_path(base_name)
     end
 
-    stn_title = cli.epsilon == 0 ?
-        "$(landscape.name) NSGA-II search trajectory network" :
-        "$(landscape.name) NSGA-II search trajectory network (epsilon=$(cli.epsilon), reporting only)"
+    stn_title = nsga2_stn_title(
+        landscape.name,
+        cli.epsilon,
+        cli.stn_first_generations,
+        cli.stn_last_generations,
+    )
 
     saved_stn = save_nsga2_search_trajectory_network_plot(
         landscape,
         result,
         stn_output;
+        first_generations=cli.stn_first_generations,
         values=penalized_fitness_values(landscape, cli.epsilon),
+        last_generations=cli.stn_last_generations,
         title=stn_title,
         fitness_label=cli.epsilon == 0 ? "Fitness" : "Penalized fitness",
     )

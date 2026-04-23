@@ -28,6 +28,14 @@ function load_landscape_key(key::AbstractString)
 
     haskey(DATASETS, key) || error("Unknown dataset key: $key")
     dataset = DATASETS[key]
+    data_path = dataset.path
+
+    # Check if it's a CSV file (not HDF5)
+    if endswith(data_path, ".csv")
+        return load_landscape(data_path, dataset.num_features; name=key)
+    end
+
+    # Otherwise, parse HDF5 and convert to CSV
     csv_path = default_output_path(key)
 
     if !isfile(csv_path)

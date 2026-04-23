@@ -1,5 +1,6 @@
 const PROJECT_ROOT = normpath(joinpath(@__DIR__, ".."))
 const RAW_DATA_DIR = joinpath(PROJECT_ROOT, "data", "raw")
+const TEST_DATA_DIR = joinpath(PROJECT_ROOT, "data", "test_data")
 const CSV_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "csv")
 const NSGA2_RESULT_EXPORT_DIR = joinpath(CSV_EXPORT_DIR, "results")
 const PLOT_EXPORT_DIR = joinpath(PROJECT_ROOT, "exports", "plots")
@@ -20,6 +21,18 @@ const DATASETS = Dict(
     "letter-r" => (
         path = joinpath(RAW_DATA_DIR, "08-letter-r_knn_F.h5"),
         num_features = 16,
+    ),
+    "zoo" => (
+        path = joinpath(TEST_DATA_DIR, "06-zoo_lr_F.h5" ),
+        num_features = 16
+    ),
+    "hepatitis" => (
+        path = joinpath(TEST_DATA_DIR, "10-hepatitis_lr_F.h5" ),
+        num_features = 19
+    ),
+    "triangle-asymmetric" => (
+        path = joinpath(TEST_DATA_DIR, "triangle_asymmetric.csv"),
+        num_features = 31,
     ),
 )
 

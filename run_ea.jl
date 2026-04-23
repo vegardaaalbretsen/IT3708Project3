@@ -9,13 +9,15 @@ function usage()
     println("")
     println("Examples:")
     println("  julia --project=. run_ea.jl breast-w")
-    println("  julia --project=. run_ea.jl breast-w 10000 0.01")
+    println("  julia --project=. run_ea.jl breast-w 100 0.01")
     println("  julia --project=. run_ea.jl triangle 5000 0.0 42 0")
-    println("  julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42")
-    println("  julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42")
+    println("  julia --project=. run_ea.jl breast-w 100 0.01 --plot trace --seed 42")
+    println("  julia --project=. run_ea.jl breast-w 100 0.01 --plot feature-count --seed 42")
     println("  julia --project=. run_ea.jl triangle 5000 0.1 --plot both --seed 42 --initial-index 0")
     println("  julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2")
 end
+
+default_cli_epsilon(dataset_key::AbstractString) = dataset_key == "triangle" ? 0.0 : 0.01
 
 function parse_cli(args::Vector{String})
     positional = String[]
@@ -85,8 +87,8 @@ function parse_cli(args::Vector{String})
     length(positional) <= 7 || error("Too many positional arguments")
 
     dataset_key = length(positional) >= 1 ? positional[1] : "breast-w"
-    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 10_000
-    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : 0.0
+    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 100
+    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : default_cli_epsilon(dataset_key)
 
     if isnothing(seed) && length(positional) >= 4
         seed = parse(Int, positional[4])
@@ -125,7 +127,7 @@ function parse_cli(args::Vector{String})
         initial_index = initial_index,
         population_size = isnothing(population_size) ? 100 : population_size,
         crossover_probability = isnothing(crossover_probability) ? 0.95 : crossover_probability,
-        mutation_probability = mutation_probability,
+        mutation_probability = isnothing(mutation_probability) ? 0.0625 : mutation_probability,
         tournament_size = isnothing(tournament_size) ? 4 : tournament_size,
         survivor_mode = isnothing(survivor_mode) ? :elitist : survivor_mode,
         elite = isnothing(elite) ? 4 : elite,

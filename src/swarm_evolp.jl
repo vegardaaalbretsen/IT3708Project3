@@ -230,10 +230,10 @@ end
 function run_swarm_ea(landscape::Landscape;
                       iterations::Integer,
                       epsilon::Real = 0.0,
-                      swarm_size::Integer = 40,
-                      w::Real = 0.7,
-                      c1::Real = 1.4,
-                      c2::Real = 1.4,
+                      swarm_size::Integer = 100,
+                      w::Real = 0.95,
+                      c1::Real = 2.0,
+                      c2::Real = 0.4,
                       threaded_evaluation::Bool = Threads.nthreads() > 1,
                       keep_history::Bool = false,
                       rng::AbstractRNG = Random.default_rng())

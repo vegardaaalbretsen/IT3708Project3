@@ -9,13 +9,15 @@ function usage()
     println("")
     println("Examples:")
     println("  julia --project=. run_swarm.jl breast-w")
-    println("  julia --project=. run_swarm.jl breast-w 500 0.01")
+    println("  julia --project=. run_swarm.jl breast-w 300 0.01")
     println("  julia --project=. run_swarm.jl triangle 300 0.0 --seed 42")
-    println("  julia --project=. run_swarm.jl breast-w 500 0.01 --swarm-size 50 --w 0.7 --c1 1.4 --c2 1.4")
-    println("  julia --project=. run_swarm.jl breast-w 500 0.01 --plot feature-count --seed 42")
-    println("  julia --project=. run_swarm.jl breast-w 500 0.01 --plot trace --seed 42")
+    println("  julia --project=. run_swarm.jl breast-w 300 0.01 --swarm-size 100 --w 0.95 --c1 2.0 --c2 0.4")
+    println("  julia --project=. run_swarm.jl breast-w 300 0.01 --plot feature-count --seed 42")
+    println("  julia --project=. run_swarm.jl breast-w 300 0.01 --plot trace --seed 42")
     println("  julia --project=. run_swarm.jl triangle 300 0.0 --plot hbm --seed 42")
 end
+
+default_cli_epsilon(dataset_key::AbstractString) = dataset_key == "triangle" ? 0.0 : 0.01
 
 function parse_cli(args::Vector{String})
     positional = String[]
@@ -70,8 +72,8 @@ function parse_cli(args::Vector{String})
     length(positional) <= 10 || error("Too many positional arguments")
 
     dataset_key = length(positional) >= 1 ? positional[1] : "breast-w"
-    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 500
-    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : 0.0
+    iterations = length(positional) >= 2 ? parse(Int, positional[2]) : 300
+    epsilon = length(positional) >= 3 ? parse(Float64, positional[3]) : default_cli_epsilon(dataset_key)
 
     if isnothing(seed) && length(positional) >= 4
         seed = parse(Int, positional[4])
@@ -114,10 +116,10 @@ function parse_cli(args::Vector{String})
         iterations = iterations,
         epsilon = epsilon,
         seed = seed,
-        swarm_size = isnothing(swarm_size) ? 40 : swarm_size,
-        w = isnothing(w) ? 0.7 : w,
-        c1 = isnothing(c1) ? 1.4 : c1,
-        c2 = isnothing(c2) ? 1.4 : c2,
+        swarm_size = isnothing(swarm_size) ? 100 : swarm_size,
+        w = isnothing(w) ? 0.95 : w,
+        c1 = isnothing(c1) ? 2.0 : c1,
+        c2 = isnothing(c2) ? 0.4 : c2,
         plot_kind = plot_kind,
         output_path = output_path,
     )

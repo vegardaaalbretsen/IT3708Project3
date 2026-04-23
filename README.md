@@ -73,7 +73,11 @@ julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle
 
 `global_optima_seen` is cumulative: it counts the number of distinct global optima that appeared anywhere in the population/front up to that generation. `global_optima_fraction` is that count divided by the total number of global optima in the landscape for the chosen `epsilon`.
 
-The default batch experiment budget is 100 iterations/generations for each algorithm. This keeps the comparison focused on convergence behavior instead of only showing that all algorithms eventually find the same solution.
+The default batch experiment settings match the report configuration:
+
+- GA: 100 iterations, population 100, `p_c = 0.95`, `p_m = 0.0625`, tournament size 4, elitist survival, elite 4
+- NSGA-II: 300 iterations, population 300, `p_c = 0.60`, `p_m = 0.1875`
+- Swarm: 300 iterations, population 100, `w = 0.95`, `c1 = 2.0`, `c2 = 0.4`
 
 Create plots from the experiment generation statistics:
 
@@ -111,10 +115,10 @@ Run the single-objective GA on a landscape:
 
 ```bash
 julia --project=. run_ea.jl breast-w
-julia --project=. run_ea.jl breast-w 10000 0.01
+julia --project=. run_ea.jl breast-w 100 0.01
 julia --project=. run_ea.jl triangle 5000 0.0 42 0
-julia --project=. run_ea.jl breast-w 10000 0.01 --plot trace --seed 42
-julia --project=. run_ea.jl breast-w 10000 0.01 --plot feature-count --seed 42
+julia --project=. run_ea.jl breast-w 100 0.01 --plot trace --seed 42
+julia --project=. run_ea.jl breast-w 100 0.01 --plot feature-count --seed 42
 julia --project=. run_ea.jl triangle 5000 0.01 --plot both --seed 42 --initial-index 0
 julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 --tournament-size 5 --survivor-mode generational --elite 2
 ```
@@ -122,7 +126,7 @@ julia --project=. run_ea.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02 -
 To enable threaded evaluation, run for example:
 
 ```bash
-julia --threads auto --project=. run_ea.jl breast-w 500 0.01
+julia --threads auto --project=. run_ea.jl breast-w 100 0.01
 ```
 
 `run_ea.jl` supports:
@@ -148,14 +152,13 @@ using Random
 landscape = load_landscape_key("breast-w")
 result = run_single_objective_ea(
     landscape;
-    iterations=500,
+    iterations=100,
     epsilon=0.01,
-    population_size=150,
-    crossover_probability=0.9,
-    mutation_probability=0.02,
-    tournament_size=5,
-    survivor_mode=:generational,
-    elite=2,
+    population_size=100,
+    crossover_probability=0.95,
+    tournament_size=4,
+    survivor_mode=:elitist,
+    elite=4,
     rng=MersenneTwister(42),
     keep_history=true,
 )
@@ -168,19 +171,19 @@ Run NSGA-II on a landscape:
 
 ```bash
 julia --project=. run_nsga2.jl breast-w
-julia --project=. run_nsga2.jl breast-w 1000 0.01
+julia --project=. run_nsga2.jl breast-w 300 0.01
 julia --project=. run_nsga2.jl triangle 500 0.0 42 0
-julia --project=. run_nsga2.jl breast-w 500 0.01 --popsize 150 --pc 0.9 --pm 0.02
-julia --project=. run_nsga2.jl breast-w 500 0.01 --plot front
-julia --project=. run_nsga2.jl breast-w 500 0.01 --plot stn
-julia --project=. run_nsga2.jl breast-w 500 0.01 --plot both
-julia --project=. run_nsga2.jl breast-w 500 0.01 --plot all
+julia --project=. run_nsga2.jl breast-w 300 0.01 --popsize 300 --pc 0.6 --pm 0.1875
+julia --project=. run_nsga2.jl breast-w 300 0.01 --plot front
+julia --project=. run_nsga2.jl breast-w 300 0.01 --plot stn
+julia --project=. run_nsga2.jl breast-w 300 0.01 --plot both
+julia --project=. run_nsga2.jl breast-w 300 0.01 --plot all
 ```
 
 To enable threaded evaluation, run for example:
 
 ```bash
-julia --threads auto --project=. run_nsga2.jl breast-w 500 0.01 --plot all
+julia --threads auto --project=. run_nsga2.jl breast-w 300 0.01 --plot all
 ```
 
 `run_nsga2.jl` supports:
@@ -242,11 +245,11 @@ using Random
 landscape = load_landscape_key("breast-w")
 result = run_nsga2_feature_ea(
     landscape;
-    iterations=500,
+    iterations=300,
     epsilon=0.01,
-    population_size=150,
-    crossover_probability=0.9,
-    mutation_probability=0.02,
+    population_size=300,
+    crossover_probability=0.6,
+    mutation_probability=0.1875,
     rng=MersenneTwister(42),
     keep_history=true,
 )
@@ -282,11 +285,11 @@ Run the swarm EA on a landscape:
 
 ```bash
 julia --project=. run_swarm.jl breast-w
-julia --project=. run_swarm.jl breast-w 500 0.01
+julia --project=. run_swarm.jl breast-w 300 0.01
 julia --project=. run_swarm.jl triangle 300 0.0 --seed 42
-julia --project=. run_swarm.jl breast-w 500 0.01 --swarm-size 50 --w 0.7 --c1 1.4 --c2 1.4
-julia --project=. run_swarm.jl breast-w 500 0.01 --plot feature-count --seed 42
-julia --project=. run_swarm.jl breast-w 500 0.01 --plot trace --seed 42
+julia --project=. run_swarm.jl breast-w 300 0.01 --swarm-size 100 --w 0.95 --c1 2.0 --c2 0.4
+julia --project=. run_swarm.jl breast-w 300 0.01 --plot feature-count --seed 42
+julia --project=. run_swarm.jl breast-w 300 0.01 --plot trace --seed 42
 julia --project=. run_swarm.jl triangle 300 0.0 --plot hbm --seed 42
 julia --project=. run_swarm.jl triangle 300 0.0 --plot all --seed 42
 ```
@@ -294,7 +297,7 @@ julia --project=. run_swarm.jl triangle 300 0.0 --plot all --seed 42
 To enable threaded particle evaluation, run for example:
 
 ```bash
-julia --threads auto --project=. run_swarm.jl breast-w 500 0.01 --plot all
+julia --threads auto --project=. run_swarm.jl breast-w 300 0.01 --plot all
 ```
 
 `run_swarm.jl` supports `--plot none|trace|feature-count|hbm|all`. The trace plot automatically enables swarm history collection.
@@ -322,9 +325,12 @@ using Random
 landscape = load_landscape_key("breast-w")
 result = run_swarm_ea(
     landscape;
-    iterations=200,
+    iterations=300,
     epsilon=0.01,
-    swarm_size=40,
+    swarm_size=100,
+    w=0.95,
+    c1=2.0,
+    c2=0.4,
     rng=MersenneTwister(42),
     keep_history=true,
 )
