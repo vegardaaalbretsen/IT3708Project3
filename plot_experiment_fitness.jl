@@ -10,6 +10,8 @@ const METRIC_LABELS = Dict(
     "max_fitness" => "Maximum fitness",
     "best_so_far_fitness" => "Best-so-far fitness",
     "diversity_entropy" => "Normalized diversity entropy",
+    "global_optima_seen" => "Cumulative global optima seen",
+    "global_optima_fraction" => "Global optima coverage",
 )
 
 struct GenerationStatRow
@@ -175,6 +177,10 @@ function plot_metric_from_generation_stats(input_path::AbstractString,
             linewidth = 3,
             size = (1100, 700),
             dpi = 180,
+            left_margin = 18Plots.mm,
+            right_margin = 8Plots.mm,
+            top_margin = 8Plots.mm,
+            bottom_margin = 12Plots.mm,
             gridalpha = 0.25,
             background_color = :white,
         )

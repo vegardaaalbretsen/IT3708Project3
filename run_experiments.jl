@@ -42,6 +42,9 @@ struct ExperimentRun
     penalized_fitness::Float64
     evaluations::Int
     runtime::Float64
+    global_optima_seen::Int
+    total_global_optima::Int
+    global_optima_fraction::Float64
     parameters::String
 end
 
@@ -56,6 +59,8 @@ struct GenerationStat
     max_fitness::Float64
     best_so_far_fitness::Float64
     diversity_entropy::Float64
+    global_optima_seen::Int
+    global_optima_fraction::Float64
 end
 
 struct PopulationSnapshot
@@ -87,6 +92,10 @@ struct ExperimentSummary
     mean_accuracy::Float64
     mean_num_selected::Float64
     mean_runtime::Float64
+    total_global_optima::Int
+    mean_global_optima_seen::Float64
+    max_global_optima_seen::Int
+    mean_global_optima_fraction::Float64
     best_index::Int
     best_bitstring::String
     best_accuracy::Float64
@@ -308,6 +317,21 @@ function experiment_epsilons(landscape::Landscape, epsilons::AbstractVector{<:Re
     return landscape.name == "triangle" ? [0.0] : Float64.(epsilons)
 end
 
+function experiment_global_optima(landscape::Landscape, epsilon::Real)
+    values = IT3708Project3.penalized_fitness_values(landscape, epsilon)
+    return sort!(IT3708Project3.global_optima(landscape; values=values))
+end
+
+function final_optima_progress(optima_trace)
+    if isempty(optima_trace.cumulative_counts)
+        count = length(optima_trace.found)
+        fraction = optima_trace.total == 0 ? 0.0 : count / optima_trace.total
+        return count, Float64(fraction)
+    end
+
+    return optima_trace.cumulative_counts[end], optima_trace.cumulative_fraction[end]
+end
+
 function make_generation_stat(algorithm::Symbol,
                               landscape::Landscape,
                               seed::Int,
@@ -315,7 +339,9 @@ function make_generation_stat(algorithm::Symbol,
                               generation::Int,
                               values::AbstractVector{<:Real},
                               best_so_far::Real,
-                              diversity_entropy::Real)
+                              diversity_entropy::Real,
+                              global_optima_seen::Integer,
+                              global_optima_fraction::Real)
     return GenerationStat(
         algorithm,
         landscape.name,
@@ -327,6 +353,8 @@ function make_generation_stat(algorithm::Symbol,
         maximum(values),
         Float64(best_so_far),
         Float64(diversity_entropy),
+        Int(global_optima_seen),
+        Float64(global_optima_fraction),
     )
 end
 
@@ -415,7 +443,7 @@ function population_snapshot_rows(landscape::Landscape,
     return rows
 end
 
-function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int)
+function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int, optima_trace)
     rows = GenerationStat[]
 
     for i in eachindex(result.min_history)
@@ -432,6 +460,8 @@ function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, see
                 Float64(result.max_history[i]),
                 Float64(result.best_history[i]),
                 landscape.num_features <= 0 ? 0.0 : Float64(result.entropy_history[i]) / landscape.num_features,
+                optima_trace.cumulative_counts[i],
+                optima_trace.cumulative_fraction[i],
             ),
         )
     end
@@ -439,7 +469,7 @@ function ga_generation_stats(landscape::Landscape, result, epsilon::Float64, see
     return rows
 end
 
-function nsga2_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int)
+function nsga2_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int, optima_trace)
     rows = GenerationStat[]
     best_so_far = -Inf
 
@@ -448,13 +478,27 @@ function nsga2_generation_stats(landscape::Landscape, result, epsilon::Float64, 
         values = values_for_indices(landscape, population_indices, epsilon)
         best_so_far = max(best_so_far, maximum(values))
         diversity = entropy_from_indices(population_indices, landscape.num_features)
-        push!(rows, make_generation_stat(:nsga2, landscape, seed, epsilon, i - 1, values, best_so_far, diversity))
+        push!(
+            rows,
+            make_generation_stat(
+                :nsga2,
+                landscape,
+                seed,
+                epsilon,
+                i - 1,
+                values,
+                best_so_far,
+                diversity,
+                optima_trace.cumulative_counts[i],
+                optima_trace.cumulative_fraction[i],
+            ),
+        )
     end
 
     return rows
 end
 
-function swarm_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int)
+function swarm_generation_stats(landscape::Landscape, result, epsilon::Float64, seed::Int, optima_trace)
     rows = GenerationStat[]
 
     for i in eachindex(result.particle_index_history)
@@ -462,15 +506,30 @@ function swarm_generation_stats(landscape::Landscape, result, epsilon::Float64, 
         values = values_for_indices(landscape, particle_indices, epsilon)
         best_so_far = result.best_penalized_fitness_history[i]
         diversity = entropy_from_indices(particle_indices, landscape.num_features)
-        push!(rows, make_generation_stat(:swarm, landscape, seed, epsilon, i - 1, values, best_so_far, diversity))
+        push!(
+            rows,
+            make_generation_stat(
+                :swarm,
+                landscape,
+                seed,
+                epsilon,
+                i - 1,
+                values,
+                best_so_far,
+                diversity,
+                optima_trace.cumulative_counts[i],
+                optima_trace.cumulative_fraction[i],
+            ),
+        )
     end
 
     return rows
 end
 
-function ga_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig)
+function ga_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig, optima_trace)
     state = IT3708Project3.candidate_state(landscape, result.best_index, epsilon)
     evaluations = config.ga_population_size * (1 + 2 * config.ga_iterations)
+    global_optima_seen, global_optima_fraction = final_optima_progress(optima_trace)
 
     return ExperimentRun(
         :ga,
@@ -484,12 +543,16 @@ function ga_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, r
         state.penalized_fitness,
         evaluations,
         runtime,
+        global_optima_seen,
+        optima_trace.total,
+        global_optima_fraction,
         parameters_string(:ga, config),
     )
 end
 
-function nsga2_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig)
+function nsga2_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig, optima_trace)
     state = IT3708Project3.candidate_state(landscape, result.best_penalized_index, epsilon)
+    global_optima_seen, global_optima_fraction = final_optima_progress(optima_trace)
 
     return ExperimentRun(
         :nsga2,
@@ -503,12 +566,16 @@ function nsga2_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int
         state.penalized_fitness,
         result.evaluations,
         runtime,
+        global_optima_seen,
+        optima_trace.total,
+        global_optima_fraction,
         parameters_string(:nsga2, config),
     )
 end
 
-function swarm_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig)
+function swarm_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int, runtime::Float64, config::ExperimentConfig, optima_trace)
     state = IT3708Project3.candidate_state(landscape, result.best_index, epsilon)
+    global_optima_seen, global_optima_fraction = final_optima_progress(optima_trace)
 
     return ExperimentRun(
         :swarm,
@@ -522,6 +589,9 @@ function swarm_run_row(landscape::Landscape, result, epsilon::Float64, seed::Int
         state.penalized_fitness,
         result.evaluations,
         runtime,
+        global_optima_seen,
+        optima_trace.total,
+        global_optima_fraction,
         parameters_string(:swarm, config),
     )
 end
@@ -530,7 +600,8 @@ function run_one_experiment(landscape::Landscape,
                             algorithm::Symbol,
                             epsilon::Float64,
                             seed::Int,
-                            config::ExperimentConfig)
+                            config::ExperimentConfig,
+                            global_optima_indices::AbstractVector{<:Integer})
     rng = MersenneTwister(seed)
 
     if algorithm == :ga
@@ -551,7 +622,8 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
-        generation_rows = ga_generation_stats(landscape, result, epsilon, seed)
+        optima_trace = IT3708Project3.optima_coverage_trace(result.population_indices_history, global_optima_indices)
+        generation_rows = ga_generation_stats(landscape, result, epsilon, seed, optima_trace)
         snapshot_rows = population_snapshot_rows(
             landscape,
             :ga,
@@ -560,7 +632,7 @@ function run_one_experiment(landscape::Landscape,
             result.population_indices_history,
             generation_rows,
         )
-        return ga_run_row(landscape, result, epsilon, seed, runtime, config),
+        return ga_run_row(landscape, result, epsilon, seed, runtime, config, optima_trace),
                generation_rows,
                snapshot_rows
     elseif algorithm == :nsga2
@@ -578,7 +650,8 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
-        generation_rows = nsga2_generation_stats(landscape, result, epsilon, seed)
+        optima_trace = IT3708Project3.optima_coverage_trace(result.population_indices_history, global_optima_indices)
+        generation_rows = nsga2_generation_stats(landscape, result, epsilon, seed, optima_trace)
         snapshot_rows = population_snapshot_rows(
             landscape,
             :nsga2,
@@ -587,7 +660,7 @@ function run_one_experiment(landscape::Landscape,
             result.population_indices_history,
             generation_rows,
         )
-        return nsga2_run_row(landscape, result, epsilon, seed, runtime, config),
+        return nsga2_run_row(landscape, result, epsilon, seed, runtime, config, optima_trace),
                generation_rows,
                snapshot_rows
     elseif algorithm == :swarm
@@ -606,7 +679,8 @@ function run_one_experiment(landscape::Landscape,
             )
         end
         result = result_ref[]
-        generation_rows = swarm_generation_stats(landscape, result, epsilon, seed)
+        optima_trace = IT3708Project3.optima_coverage_trace(result.particle_index_history, global_optima_indices)
+        generation_rows = swarm_generation_stats(landscape, result, epsilon, seed, optima_trace)
         snapshot_rows = population_snapshot_rows(
             landscape,
             :swarm,
@@ -615,7 +689,7 @@ function run_one_experiment(landscape::Landscape,
             result.particle_index_history,
             generation_rows,
         )
-        return swarm_run_row(landscape, result, epsilon, seed, runtime, config),
+        return swarm_run_row(landscape, result, epsilon, seed, runtime, config, optima_trace),
                generation_rows,
                snapshot_rows
     end
@@ -627,7 +701,8 @@ function run_repeated_experiments(landscape::Landscape,
                                   algorithm::Symbol,
                                   epsilon::Float64,
                                   seeds::AbstractVector{<:Integer},
-                                  config::ExperimentConfig)
+                                  config::ExperimentConfig,
+                                  global_optima_indices::AbstractVector{<:Integer})
     run_rows = ExperimentRun[]
     generation_rows = GenerationStat[]
     snapshot_rows = PopulationSnapshot[]
@@ -635,7 +710,7 @@ function run_repeated_experiments(landscape::Landscape,
     for seed in seeds
         println("Running $(algorithm) on $(landscape.name), epsilon=$(epsilon), seed=$(seed)")
         run_row, run_generation_rows, run_snapshot_rows =
-            run_one_experiment(landscape, algorithm, epsilon, Int(seed), config)
+            run_one_experiment(landscape, algorithm, epsilon, Int(seed), config, global_optima_indices)
         push!(run_rows, run_row)
         append!(generation_rows, run_generation_rows)
         append!(snapshot_rows, run_snapshot_rows)
@@ -648,14 +723,15 @@ function run_algorithm_suite(landscape::Landscape,
                              algorithms::AbstractVector{Symbol},
                              epsilon::Float64,
                              seeds::AbstractVector{<:Integer},
-                             config::ExperimentConfig)
+                             config::ExperimentConfig,
+                             global_optima_indices::AbstractVector{<:Integer})
     run_rows = ExperimentRun[]
     generation_rows = GenerationStat[]
     snapshot_rows = PopulationSnapshot[]
 
     for algorithm in algorithms
         algorithm_run_rows, algorithm_generation_rows, algorithm_snapshot_rows =
-            run_repeated_experiments(landscape, algorithm, epsilon, seeds, config)
+            run_repeated_experiments(landscape, algorithm, epsilon, seeds, config, global_optima_indices)
         append!(run_rows, algorithm_run_rows)
         append!(generation_rows, algorithm_generation_rows)
         append!(snapshot_rows, algorithm_snapshot_rows)
@@ -681,6 +757,8 @@ function summarize_runs(run_rows::Vector{ExperimentRun})
     for key in sort(collect(keys(groups)); by = key -> (String(key[2]), String(key[1]), key[3]))
         rows = groups[key]
         fitnesses = [row.penalized_fitness for row in rows]
+        global_optima_seen = [row.global_optima_seen for row in rows]
+        global_optima_fraction = [row.global_optima_fraction for row in rows]
         best = rows[argmax(fitnesses)]
 
         push!(
@@ -697,6 +775,10 @@ function summarize_runs(run_rows::Vector{ExperimentRun})
                 mean(row.accuracy for row in rows),
                 mean(row.num_selected for row in rows),
                 mean(row.runtime for row in rows),
+                first(rows).total_global_optima,
+                mean(global_optima_seen),
+                maximum(global_optima_seen),
+                mean(global_optima_fraction),
                 best.best_index,
                 best.best_bitstring,
                 best.accuracy,
@@ -712,7 +794,8 @@ end
 function write_raw_runs_csv(rows::Vector{ExperimentRun}, path::AbstractString)
     header = [
         "algorithm", "landscape", "seed", "epsilon", "best_index", "best_bitstring",
-        "accuracy", "num_selected", "penalized_fitness", "evaluations", "runtime", "parameters",
+        "accuracy", "num_selected", "penalized_fitness", "evaluations", "runtime",
+        "global_optima_seen", "total_global_optima", "global_optima_fraction", "parameters",
     ]
 
     return write_csv_rows(
@@ -722,7 +805,8 @@ function write_raw_runs_csv(rows::Vector{ExperimentRun}, path::AbstractString)
         row -> (
             row.algorithm, row.landscape, row.seed, row.epsilon, row.best_index,
             row.best_bitstring, row.accuracy, row.num_selected, row.penalized_fitness,
-            row.evaluations, row.runtime, row.parameters,
+            row.evaluations, row.runtime, row.global_optima_seen, row.total_global_optima,
+            row.global_optima_fraction, row.parameters,
         ),
     )
 end
@@ -731,7 +815,7 @@ function write_generation_stats_csv(rows::Vector{GenerationStat}, path::Abstract
     header = [
         "algorithm", "landscape", "seed", "epsilon", "generation",
         "min_fitness", "mean_fitness", "max_fitness", "best_so_far_fitness",
-        "diversity_entropy",
+        "diversity_entropy", "global_optima_seen", "global_optima_fraction",
     ]
 
     return write_csv_rows(
@@ -741,7 +825,7 @@ function write_generation_stats_csv(rows::Vector{GenerationStat}, path::Abstract
         row -> (
             row.algorithm, row.landscape, row.seed, row.epsilon, row.generation,
             row.min_fitness, row.mean_fitness, row.max_fitness, row.best_so_far_fitness,
-            row.diversity_entropy,
+            row.diversity_entropy, row.global_optima_seen, row.global_optima_fraction,
         ),
     )
 end
@@ -769,8 +853,9 @@ function write_summary_csv(rows::Vector{ExperimentSummary}, path::AbstractString
     header = [
         "algorithm", "landscape", "epsilon", "runs", "mean_best_fitness",
         "std_best_fitness", "min_best_fitness", "max_best_fitness",
-        "mean_accuracy", "mean_num_selected", "mean_runtime", "best_index",
-        "best_bitstring", "best_accuracy", "best_num_selected", "best_fitness",
+        "mean_accuracy", "mean_num_selected", "mean_runtime", "total_global_optima",
+        "mean_global_optima_seen", "max_global_optima_seen", "mean_global_optima_fraction",
+        "best_index", "best_bitstring", "best_accuracy", "best_num_selected", "best_fitness",
     ]
 
     return write_csv_rows(
@@ -781,8 +866,9 @@ function write_summary_csv(rows::Vector{ExperimentSummary}, path::AbstractString
             row.algorithm, row.landscape, row.epsilon, row.runs,
             row.mean_best_fitness, row.std_best_fitness, row.min_best_fitness,
             row.max_best_fitness, row.mean_accuracy, row.mean_num_selected,
-            row.mean_runtime, row.best_index, row.best_bitstring, row.best_accuracy,
-            row.best_num_selected, row.best_fitness,
+            row.mean_runtime, row.total_global_optima, row.mean_global_optima_seen,
+            row.max_global_optima_seen, row.mean_global_optima_fraction, row.best_index,
+            row.best_bitstring, row.best_accuracy, row.best_num_selected, row.best_fitness,
         ),
     )
 end
@@ -797,8 +883,16 @@ function run_full_experiment_suite(config::ExperimentConfig)
         landscape = load_landscape_key(landscape_key)
 
         for epsilon in experiment_epsilons(landscape, config.epsilons)
+            global_optima_indices = experiment_global_optima(landscape, epsilon)
             suite_run_rows, suite_generation_rows, suite_snapshot_rows =
-                run_algorithm_suite(landscape, config.algorithms, epsilon, config.seeds, config)
+                run_algorithm_suite(
+                    landscape,
+                    config.algorithms,
+                    epsilon,
+                    config.seeds,
+                    config,
+                    global_optima_indices,
+                )
             append!(run_rows, suite_run_rows)
             append!(generation_rows, suite_generation_rows)
             append!(snapshot_rows, suite_snapshot_rows)

@@ -64,12 +64,14 @@ julia --threads auto --project=. run_experiments.jl --seeds 10 --epsilon 0.01
 julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle --algorithms ga,swarm
 ```
 
-`run_experiments.jl` writes three CSV files under `exports/csv/experiments/`:
+`run_experiments.jl` writes four CSV files under `exports/csv/experiments/`:
 
-- `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon
-- `generation_stats.csv`: min, average, max, best-so-far fitness, and normalized diversity entropy per generation
+- `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon, including how many unique global optima were seen during the run
+- `generation_stats.csv`: min, average, max, best-so-far fitness, normalized diversity entropy, and cumulative global-optima coverage per generation
 - `population_snapshots.csv`: selected population snapshots grouped by unique bitstring and duplicate count
-- `summary.csv`: average and standard deviation of best fitness across runs
+- `summary.csv`: average and standard deviation of best fitness across runs, plus aggregated global-optima coverage
+
+`global_optima_seen` is cumulative: it counts the number of distinct global optima that appeared anywhere in the population/front up to that generation. `global_optima_fraction` is that count divided by the total number of global optima in the landscape for the chosen `epsilon`.
 
 The default batch experiment budget is 100 iterations/generations for each algorithm. This keeps the comparison focused on convergence behavior instead of only showing that all algorithms eventually find the same solution.
 
@@ -79,6 +81,8 @@ Create plots from the experiment generation statistics:
 julia --project=. plot_experiment_fitness.jl
 julia --project=. plot_experiment_fitness.jl --metric mean_fitness
 julia --project=. plot_experiment_fitness.jl --metric diversity_entropy
+julia --project=. plot_experiment_fitness.jl --metric global_optima_seen
+julia --project=. plot_experiment_fitness.jl --metric global_optima_fraction
 ```
 
 By default, `plot_experiment_fitness.jl` plots `best_so_far_fitness`. To plot diversity/entropy, explicitly pass `--metric diversity_entropy`.
@@ -88,6 +92,8 @@ The plotting script writes one PNG per landscape and epsilon under `exports/plot
 - `best_so_far_fitness`: main convergence plot
 - `mean_fitness`: average population quality over time
 - `diversity_entropy`: normalized population diversity over time, from `0.0` to `1.0`
+- `global_optima_seen`: cumulative number of unique global optima observed
+- `global_optima_fraction`: cumulative fraction of the landscape's global optima that were observed
 
 If you want diversity plots, rerun `run_experiments.jl` first so `generation_stats.csv` includes the `diversity_entropy` column.
 

@@ -28,6 +28,7 @@ LocalPreferences.toml
 JuliaLocalPreferences.toml
 
 plots/
+csv/
 .DS_Store
 
 exports/csv/results/
