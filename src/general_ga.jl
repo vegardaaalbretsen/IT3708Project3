@@ -210,6 +210,7 @@ function run_ga(nbits::Int,
     current_best_ind_hist = params.record_history ? BitVector[] : nothing
     best_so_far_raw_hist = params.record_history ? Float64[] : nothing
     best_so_far_ind_hist = params.record_history ? BitVector[] : nothing
+    population_hist = params.record_history ? Vector{Vector{BitVector}}() : nothing
     best_ind = BitVector()
     best_raw = 0.0
     worst_ind = BitVector()
@@ -270,6 +271,7 @@ function run_ga(nbits::Int,
             push!(current_best_ind_hist, copy(population[current_best_i]))
             push!(best_so_far_raw_hist, best_raw)
             push!(best_so_far_ind_hist, copy(best_ind))
+            push!(population_hist, [copy(ind) for ind in population])
         end
 
         return raw, score, current_best_raw, current_mean_raw, current_entropy
@@ -342,6 +344,7 @@ function run_ga(nbits::Int,
         current_best_ind_hist = current_best_ind_hist,
         best_so_far_raw_hist = best_so_far_raw_hist,
         best_so_far_ind_hist = best_so_far_ind_hist,
+        population_hist = population_hist,
         initial_best_ind = initial_best_ind,
         initial_best_raw = initial_best_raw,
         final_best_ind = copy(pop[final_best_position]),

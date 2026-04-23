@@ -64,6 +64,8 @@ end
     @test all(==(0.0), landscape.time)
     @test IT3708Project3.fitness(landscape, 0) == 0.0
     @test IT3708Project3.fitness(landscape, 15) == 4.0
+    @test isapprox(IT3708Project3.penalized_fitness_values(landscape, 0.25)[16], 4.0; atol=1e-12)
+    @test isapprox(IT3708Project3.candidate_state(landscape, 15, 0.25).penalized_fitness, 4.0; atol=1e-12)
 end
 
 @testset "HBM" begin
@@ -582,12 +584,27 @@ end
         result,
         gif_path;
         fps=4,
+        final_hold_frames=2,
         size=(700, 500),
         dpi=100,
     )
     @test saved_gif == gif_path
     @test isfile(gif_path)
     @test filesize(gif_path) > 0
+
+    hbm_gif_path = tempname() * ".gif"
+    saved_hbm_gif = save_hbm_swarm_animation(
+        tiny,
+        result,
+        hbm_gif_path;
+        fps=4,
+        final_hold_frames=2,
+        size=(900, 700),
+        dpi=120,
+    )
+    @test saved_hbm_gif == hbm_gif_path
+    @test isfile(hbm_gif_path)
+    @test filesize(hbm_gif_path) > 0
 
     no_history = run_swarm_ea(
         tiny;

@@ -19,6 +19,7 @@ For threaded evaluation in the GA, NSGA-II, and swarm runners, start Julia with 
 - `src/visualization.jl`: HBM, feature-count, EA, and swarm plotting/animation
 - `run_experiments.jl`: batch experiment runner and summary CSV generator
 - `plot_experiment_fitness.jl`: plot experiment fitness/diversity curves from `generation_stats.csv`
+- `plot_population_snapshots.jl`: plot selected population snapshots from experiment runs
 - `benchmark_threaded_eval.jl`: serial vs threaded evaluation benchmark for GA, NSGA-II, and swarm
 
 ## Commands
@@ -67,7 +68,10 @@ julia --threads auto --project=. run_experiments.jl --datasets breast-w,triangle
 
 - `raw_runs.csv`: one row per algorithm, landscape, seed, and epsilon
 - `generation_stats.csv`: min, average, max, best-so-far fitness, and normalized diversity entropy per generation
+- `population_snapshots.csv`: selected population snapshots grouped by unique bitstring and duplicate count
 - `summary.csv`: average and standard deviation of best fitness across runs
+
+The default batch experiment budget is 100 iterations/generations for each algorithm. This keeps the comparison focused on convergence behavior instead of only showing that all algorithms eventually find the same solution.
 
 Create plots from the experiment generation statistics:
 
@@ -86,6 +90,16 @@ The plotting script writes one PNG per landscape and epsilon under `exports/plot
 - `diversity_entropy`: normalized population diversity over time, from `0.0` to `1.0`
 
 If you want diversity plots, rerun `run_experiments.jl` first so `generation_stats.csv` includes the `diversity_entropy` column.
+
+Create HBM and feature-count population snapshot plots for one run:
+
+```bash
+julia --project=. plot_population_snapshots.jl --landscape breast-w --algorithm ga --seed 1
+julia --project=. plot_population_snapshots.jl --landscape breast-w --algorithm nsga2 --seed 1
+julia --project=. plot_population_snapshots.jl --landscape breast-w --algorithm swarm --seed 1
+```
+
+The snapshot plotting script reads `exports/csv/experiments/population_snapshots.csv` and writes PNGs under `exports/plots/experiments/snapshots/<landscape>/<algorithm>/<plot_type>/`. It plots the selected snapshot generations from each run: start, two intermediate points, the first generation where peak best-so-far fitness was reached, and the final generation. Duplicate snapshot generations are skipped. Use `--plot feature-count` or `--plot hbm` to create only one plot type.
 
 Run the single-objective GA on a landscape:
 
@@ -315,6 +329,16 @@ save_swarm_trace_plot(landscape, result, "exports/plots/ea/breast-w_swarm_trace.
 save_fitness_by_feature_count_swarm_animation(landscape, result, "exports/plots/ea/breast-w_swarm_feature_count.gif")
 save_hbm_swarm_animation(landscape, result, "exports/plots/hbm/breast-w_swarm_hbm.gif")
 ```
+
+For presentation-friendly population snapshot GIFs with every generation and a short pause on the final frame, use:
+
+```bash
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm ga --seed 1 --plot feature-count --fps 8 --final-hold 12
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm nsga2 --seed 1 --plot feature-count --fps 8 --final-hold 12
+julia --project=. animate_population_snapshots.jl breast-w 150 0.01 --algorithm swarm --seed 1 --plot feature-count --fps 8 --final-hold 12
+```
+
+The `--final-hold` value is the number of extra copies of the last frame. At `--fps 8`, `--final-hold 12` gives roughly a 1.5 second pause at the end of the GIF. This workflow animates the grouped population snapshot for every generation, so it is usually the clearest option for presentations.
 
 The swarm trace plot includes:
 

@@ -165,27 +165,27 @@ function plot_hbm(nodes::AbstractVector{HBMNode},
         bottom_margin = 0Plots.mm,
     )
 
-    scatter!(
-        info_plt,
-        [2.0],
-        [2.0];
-        ms = 26,
-        markershape = :circle,
-        markercolor = :dodgerblue3,
-        markerstrokewidth = 0,
-        label = "Local optimum",
-    )
+        scatter!(
+            info_plt,
+            [2.0],
+            [2.0];
+            ms = 26,
+            markershape = :circle,
+            markercolor = :dodgerblue3,
+            markerstrokewidth = 0,
+            label = "Local optima",
+        )
 
-    scatter!(
-        info_plt,
-        [2.0],
-        [2.0];
-        ms = 26,
-        markershape = :circle,
-        markercolor = :red2,
-        markerstrokewidth = 0,
-        label = "Global optimum",
-    )
+        scatter!(
+            info_plt,
+            [2.0],
+            [2.0];
+            ms = 26,
+            markershape = :circle,
+            markercolor = :red2,
+            markerstrokewidth = 0,
+            label = "Global optima",
+        )
 
     label_plt = plot(
         xlim = (0, 1),
@@ -1848,6 +1848,22 @@ function save_swarm_trace_plot(landscape::Landscape,
     return output_path
 end
 
+function swarm_animation_frame_title(title_prefix::AbstractString,
+                                     generation::Integer,
+                                     unique_subsets::Integer)
+    return "$(title_prefix) (generation=$(generation), unique=$(unique_subsets))"
+end
+
+function append_animation_hold_frames!(anim::Plots.Animation, plt, hold_frames::Integer)
+    hold = max(Int(hold_frames), 0)
+
+    for _ in 1:hold
+        Plots.frame(anim, plt)
+    end
+
+    return anim
+end
+
 function save_fitness_by_feature_count_swarm_animation(landscape::Landscape,
                                                        result,
                                                        output_path::AbstractString;
@@ -1855,13 +1871,15 @@ function save_fitness_by_feature_count_swarm_animation(landscape::Landscape,
                                                        title_prefix::AbstractString = "$(landscape.name) Fitness by Feature Count with Swarm",
                                                        fitness_label::AbstractString = "Penalized fitness",
                                                        fps::Int = 10,
+                                                       final_hold_frames::Int = 0,
                                                        size::Tuple{Int, Int} = (1400, 900),
                                                        dpi::Int = 200)
     plot_data = swarm_trace_plot_data(landscape, result)
     anim = Plots.Animation()
+    last_plot = nothing
 
     for (position, iteration) in pairs(plot_data.iterations)
-        frame_title = "$(title_prefix) (iteration=$(iteration), unique=$(plot_data.unique_subsets[position]))"
+        frame_title = swarm_animation_frame_title(title_prefix, iteration, plot_data.unique_subsets[position])
         plt = plot_fitness_by_feature_count_with_swarm(
             landscape,
             result;
@@ -1873,8 +1891,10 @@ function save_fitness_by_feature_count_swarm_animation(landscape::Landscape,
             dpi=dpi,
         )
         Plots.frame(anim, plt)
+        last_plot = plt
     end
 
+    isnothing(last_plot) || append_animation_hold_frames!(anim, last_plot, final_hold_frames)
     mkpath(dirname(output_path))
     Plots.gif(anim, output_path; fps=fps)
     return output_path
@@ -1888,13 +1908,15 @@ function save_hbm_swarm_animation(landscape::Landscape,
                                   fitness_label::AbstractString = "Penalized fitness",
                                   max_local_optima::Int = 50,
                                   fps::Int = 10,
+                                  final_hold_frames::Int = 0,
                                   size::Tuple{Int, Int} = (2200, 1400),
                                   dpi::Int = 300)
     plot_data = swarm_trace_plot_data(landscape, result)
     anim = Plots.Animation()
+    last_plot = nothing
 
     for (position, iteration) in pairs(plot_data.iterations)
-        frame_title = "$(title_prefix) (iteration=$(iteration), unique=$(plot_data.unique_subsets[position]))"
+        frame_title = swarm_animation_frame_title(title_prefix, iteration, plot_data.unique_subsets[position])
         plt = plot_hbm_with_swarm(
             landscape,
             result;
@@ -1907,8 +1929,10 @@ function save_hbm_swarm_animation(landscape::Landscape,
             dpi=dpi,
         )
         Plots.frame(anim, plt)
+        last_plot = plt
     end
 
+    isnothing(last_plot) || append_animation_hold_frames!(anim, last_plot, final_hold_frames)
     mkpath(dirname(output_path))
     Plots.gif(anim, output_path; fps=fps)
     return output_path
