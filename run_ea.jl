@@ -152,6 +152,18 @@ function default_feature_count_overlay_name(dataset_key::AbstractString, epsilon
     return "$(dataset_key)_ea_feature_count_e$(epsilon_tag)"
 end
 
+function index_to_bitstring(index::Integer, n_features::Integer)
+    n = Int(n_features)
+    value = Int(index)
+    chars = Vector{Char}(undef, n)
+
+    for bit in 1:n
+        chars[n - bit + 1] = iszero(value & (1 << (bit - 1))) ? '0' : '1'
+    end
+
+    return String(chars)
+end
+
 if any(arg -> arg in ("-h", "--help"), ARGS)
     usage()
     exit()
@@ -182,9 +194,9 @@ println("Epsilon: $(result.epsilon)")
 println("Population size: $(result.population_size)")
 println("Threaded evaluation: $(result.threaded_evaluation)")
 println("Parameters: pc=$(result.crossover_probability), pm=$(result.mutation_probability), tournament=$(result.tournament_size), survivor=$(result.survivor_mode), elite=$(result.elite)")
-println("Initial: index=$(result.initial_index), features=$(result.initial_num_selected), accuracy=$(result.initial_accuracy), penalized=$(result.initial_penalized_fitness)")
-println("Final:   index=$(result.final_index), features=$(result.final_num_selected), accuracy=$(result.final_accuracy), penalized=$(result.final_penalized_fitness)")
-println("Best:    index=$(result.best_index), features=$(result.best_num_selected), accuracy=$(result.best_accuracy), penalized=$(result.best_penalized_fitness)")
+println("Initial: index=$(result.initial_index), bitstring=$(index_to_bitstring(result.initial_index, landscape.num_features)), features=$(result.initial_num_selected), accuracy=$(result.initial_accuracy), penalized=$(result.initial_penalized_fitness)")
+println("Final:   index=$(result.final_index), bitstring=$(index_to_bitstring(result.final_index, landscape.num_features)), features=$(result.final_num_selected), accuracy=$(result.final_accuracy), penalized=$(result.final_penalized_fitness)")
+println("Best:    index=$(result.best_index), bitstring=$(index_to_bitstring(result.best_index, landscape.num_features)), features=$(result.best_num_selected), accuracy=$(result.best_accuracy), penalized=$(result.best_penalized_fitness)")
 
 values = cli.epsilon == 0 ? fitness_values(landscape) : penalized_fitness_values(landscape, cli.epsilon)
 fitness_label = cli.epsilon == 0 ? "Fitness" : "Penalized fitness"

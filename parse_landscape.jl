@@ -3,8 +3,11 @@ using IT3708Project3
 function usage()
     println("Usage: julia --project=. parse_landscape.jl <dataset-key> [output-csv]")
     println("")
+    println("Available dataset keys: breast-w, credit-a, letter-r, zoo, hepatitis")
+    println("")
     println("Examples:")
     println("  julia --project=. parse_landscape.jl breast-w")
+    println("  julia --project=. parse_landscape.jl zoo")
     println("  julia --project=. parse_landscape.jl credit-a exports/csv/credit-a_metrics.csv")
 end
 

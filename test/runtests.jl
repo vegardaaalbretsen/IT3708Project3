@@ -51,6 +51,42 @@ end
     @test endswith(default_stn_plot_path("breast-w_nsga2_stn"), joinpath("stn", "breast-w_nsga2_stn.png"))
 end
 
+@testset "Step 6 dataset registration" begin
+    @test IT3708Project3.DATASETS["zoo"].num_features == 16
+    @test IT3708Project3.DATASETS["hepatitis"].num_features == 19
+
+    function exercise_step6_load(dataset_key::String, num_features::Int)
+        csv_path = default_output_path(dataset_key)
+        backup_path = isfile(csv_path) ? tempname() * ".csv" : nothing
+
+        if !isnothing(backup_path)
+            cp(csv_path, backup_path; force=true)
+        end
+
+        mkpath(dirname(csv_path))
+        stub = Landscape(dataset_key, num_features, [1], [1], [0.5], [0.0], false)
+        IT3708Project3.write_csv(stub, csv_path)
+
+        try
+            landscape = load_landscape_key(dataset_key)
+            @test landscape.name == dataset_key
+            @test landscape.num_features == num_features
+            @test landscape.allow_zero == false
+            @test landscape.indices == [1]
+        finally
+            if isnothing(backup_path)
+                rm(csv_path; force=true)
+            else
+                cp(backup_path, csv_path; force=true)
+                rm(backup_path; force=true)
+            end
+        end
+    end
+
+    exercise_step6_load("zoo", 16)
+    exercise_step6_load("hepatitis", 19)
+end
+
 @testset "Triangle landscape" begin
     landscape = triangle_landscape()
 
