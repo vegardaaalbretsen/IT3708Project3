@@ -1,7 +1,7 @@
 using IT3708Project3
 
 function usage()
-    println("Usage: julia --project=. plot_feature_count.jl <dataset-key|triangle> [epsilon] [output-path]")
+    println("Usage: julia --project=. plot_feature_count.jl <dataset-key|triangle|triangle-asym> [epsilon] [output-path]")
     println("")
     println("Examples:")
     println("  julia --project=. plot_feature_count.jl breast-w")
@@ -21,16 +21,8 @@ else
 end
 
 output_path = length(ARGS) >= 3 ? ARGS[3] : default_feature_count_plot_path(default_name)
-values = isnothing(epsilon) ? fitness_values(landscape) : penalized_fitness_values(landscape, epsilon)
 fitness_label = isnothing(epsilon) ? "Fitness" : "Penalized fitness"
 title = isnothing(epsilon) ? "$(landscape.name) fitness by feature count" : "$(landscape.name) fitness by feature count (epsilon=$(epsilon))"
-
-saved_path = save_fitness_by_feature_count_plot(
-    landscape,
-    output_path;
-    values=values,
-    title=title,
-    fitness_label=fitness_label,
-)
+saved_path = save_fitness_by_feature_count_plot(landscape, output_path; title=title, fitness_label=fitness_label)
 
 println("Saved feature-count plot for `$(landscape.name)` to `$saved_path`.")

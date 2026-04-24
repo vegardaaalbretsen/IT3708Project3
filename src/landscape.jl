@@ -24,6 +24,8 @@ end
 function load_landscape_key(key::AbstractString)
     if key == "triangle"
         return triangle_landscape()
+    elseif key == "triangle-asym"
+        return triangle_asym_landscape()
     end
 
     haskey(DATASETS, key) || error("Unknown dataset key: $key")
@@ -42,6 +44,10 @@ function fitness_values(landscape::Landscape)
     return landscape.accuracy
 end
 
+function fitness_values(landscape::TriangleByteLandscape)
+    return Float64[Float64(value) for value in landscape.fitness_table]
+end
+
 function penalty(num_features::Integer, epsilon::Real)
     num_features >= 0 || throw(ArgumentError("num_features must be non-negative"))
     0 <= epsilon <= 1 || throw(ArgumentError("epsilon must be between 0 and 1"))
@@ -57,11 +63,24 @@ function effective_epsilon(landscape::Landscape, epsilon::Real)
     return landscape.name == "triangle" ? 0.0 : Float64(epsilon)
 end
 
+function effective_epsilon(landscape::TriangleByteLandscape, epsilon::Real)
+    0 <= epsilon <= 1 || throw(ArgumentError("epsilon must be between 0 and 1"))
+    return 0.0
+end
+
 function penalized_fitness_values(landscape::Landscape, epsilon::Real)
     epsilon = effective_epsilon(landscape, epsilon)
     return [
         penalized_fitness(accuracy, num_selected, epsilon)
         for (accuracy, num_selected) in zip(landscape.accuracy, landscape.num_selected)
+    ]
+end
+
+function penalized_fitness_values(landscape::TriangleByteLandscape, epsilon::Real)
+    epsilon = effective_epsilon(landscape, epsilon)
+    return [
+        penalized_fitness(Float64(value), countActiveBits(index - 1, landscape.num_features), epsilon)
+        for (index, value) in pairs(landscape.fitness_table)
     ]
 end
 
@@ -80,6 +99,13 @@ function fitness(landscape::Landscape, index::Integer)
     return landscape.accuracy[index_position(landscape, index)]
 end
 
+function fitness(landscape::TriangleByteLandscape, index::Integer)
+    index = Int(index)
+    0 <= index < length(landscape.fitness_table) ||
+        throw(ArgumentError("index $(index) is not in landscape `$(landscape.name)`"))
+    return Float64(landscape.fitness_table[index + 1])
+end
+
 function candidate_state(landscape::Landscape, index::Integer, epsilon::Real)
     position = index_position(landscape, index)
     accuracy = landscape.accuracy[position]
@@ -92,6 +118,25 @@ function candidate_state(landscape::Landscape, index::Integer, epsilon::Real)
         index = Int(index),
         accuracy = accuracy,
         time = time,
+        penalized_fitness = objective,
+        num_selected = num_selected,
+    )
+end
+
+function candidate_state(landscape::TriangleByteLandscape, index::Integer, epsilon::Real)
+    index = Int(index)
+    0 <= index < length(landscape.fitness_table) ||
+        throw(ArgumentError("index $(index) is not in landscape `$(landscape.name)`"))
+
+    accuracy = Float64(landscape.fitness_table[index + 1])
+    num_selected = countActiveBits(index, landscape.num_features)
+    epsilon = effective_epsilon(landscape, epsilon)
+    objective = penalized_fitness(accuracy, num_selected, epsilon)
+
+    return (
+        index = index,
+        accuracy = accuracy,
+        time = 0.0,
         penalized_fitness = objective,
         num_selected = num_selected,
     )

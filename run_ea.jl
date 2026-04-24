@@ -2,8 +2,8 @@ using IT3708Project3
 using Random
 
 function usage()
-    println("Usage: julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
-    println("       julia --project=. run_ea.jl [dataset-key|triangle] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|both] [--output path]")
+    println("Usage: julia --project=. run_ea.jl [dataset-key|triangle|triangle-asym] [iterations] [epsilon] [seed] [initial-index] [plot-kind] [output-path]")
+    println("       julia --project=. run_ea.jl [dataset-key|triangle|triangle-asym] [iterations] [epsilon] [--seed N] [--initial-index I] [--popsize N] [--pc V] [--pm V] [--tournament-size N] [--survivor-mode elitist|generational] [--elite N] [--plot none|trace|feature-count|both] [--output path]")
     println("")
     println("Plot kinds: none, trace, feature-count, both")
     println("")
@@ -198,8 +198,13 @@ println("Initial: index=$(result.initial_index), bitstring=$(index_to_bitstring(
 println("Final:   index=$(result.final_index), bitstring=$(index_to_bitstring(result.final_index, landscape.num_features)), features=$(result.final_num_selected), accuracy=$(result.final_accuracy), penalized=$(result.final_penalized_fitness)")
 println("Best:    index=$(result.best_index), bitstring=$(index_to_bitstring(result.best_index, landscape.num_features)), features=$(result.best_num_selected), accuracy=$(result.best_accuracy), penalized=$(result.best_penalized_fitness)")
 
-values = cli.epsilon == 0 ? fitness_values(landscape) : penalized_fitness_values(landscape, cli.epsilon)
 fitness_label = cli.epsilon == 0 ? "Fitness" : "Penalized fitness"
+
+if landscape isa TriangleByteLandscape
+    hamming_distance = triangle_asym_hamming_distance(result.best_index, landscape.num_features)
+    println("Distance to all-ones optimum: $(hamming_distance)")
+    println("Reached global optimum: $(hamming_distance == 0)")
+end
 
 if cli.plot_kind in ("trace", "both")
     trace_output = if cli.plot_kind == "trace" && !isnothing(cli.output_path)
@@ -231,7 +236,6 @@ if cli.plot_kind in ("feature-count", "both")
         landscape,
         result,
         overlay_output;
-        values=values,
         title=overlay_title,
         fitness_label=fitness_label,
     )

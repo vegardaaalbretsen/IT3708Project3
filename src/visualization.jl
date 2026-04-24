@@ -56,6 +56,16 @@ function hbm_plot_data(landscape::Landscape; values = fitness_values(landscape))
     )
 end
 
+function hbm_plot_data(landscape::TriangleByteLandscape;
+                       max_local_optima::Int = 49)
+    sample = triangle_asym_hbm_nodes(landscape; max_local_optima=max_local_optima)
+    return hbm_plot_data(
+        sample.nodes,
+        landscape.num_features;
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function plot_hbm(nodes::AbstractVector{HBMNode},
                   n_features::Int;
                   title::AbstractString = "HBM Plot",
@@ -238,6 +248,25 @@ function plot_hbm(landscape::Landscape;
     )
 end
 
+function plot_hbm(landscape::TriangleByteLandscape;
+                  title::AbstractString = "$(landscape.name) HBM Plot",
+                  fitness_label::AbstractString = "Fitness",
+                  max_local_optima::Int = 49,
+                  size::Tuple{Int, Int} = (2200, 1400),
+                  dpi::Int = 300)
+    sample = triangle_asym_hbm_nodes(landscape; max_local_optima=max_local_optima)
+    return plot_hbm(
+        sample.nodes,
+        landscape.num_features;
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+        allow_zero=landscape.allow_zero,
+    )
+end
+
 function save_hbm_plot(nodes::AbstractVector{HBMNode},
                        n_features::Int,
                        output_path::AbstractString;
@@ -284,6 +313,26 @@ function save_hbm_plot(landscape::Landscape,
     return output_path
 end
 
+function save_hbm_plot(landscape::TriangleByteLandscape,
+                       output_path::AbstractString;
+                       title::AbstractString = "$(landscape.name) HBM Plot",
+                       fitness_label::AbstractString = "Fitness",
+                       max_local_optima::Int = 49,
+                       size::Tuple{Int, Int} = (2200, 1400),
+                       dpi::Int = 300)
+    plt = plot_hbm(
+        landscape;
+        title=title,
+        fitness_label=fitness_label,
+        max_local_optima=max_local_optima,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
 function feature_count_plot_data(landscape::Landscape; values = fitness_values(landscape))
     length(values) == length(landscape.indices) || throw(ArgumentError("values must match landscape size"))
 
@@ -304,6 +353,20 @@ function feature_count_plot_data(landscape::Landscape; values = fitness_values(l
         max_fitness = maximums,
         local_optima = local_optima(landscape; values=values),
         global_optima = global_optima(landscape; values=values),
+    )
+end
+
+function feature_count_plot_data(landscape::TriangleByteLandscape)
+    counts = collect(0:landscape.num_features)
+    values = triangle_asym_fitness_by_count(landscape.num_features)
+    optimum_counts = triangle_asym_local_optimum_counts(landscape.num_features)
+
+    return (
+        feature_counts = counts,
+        mean_fitness = values,
+        max_fitness = values,
+        local_optima_counts = Int[count for count in optimum_counts if count < landscape.num_features],
+        global_optima_counts = Int[count for count in optimum_counts if count == landscape.num_features],
     )
 end
 
@@ -385,6 +448,70 @@ function plot_fitness_by_feature_count(landscape::Landscape;
     return plt
 end
 
+function plot_fitness_by_feature_count(landscape::TriangleByteLandscape;
+                                       title::AbstractString = "$(landscape.name) Fitness by Feature Count",
+                                       fitness_label::AbstractString = "Fitness",
+                                       size::Tuple{Int, Int} = (1400, 900),
+                                       dpi::Int = 200)
+    plot_data = feature_count_plot_data(landscape)
+
+    plt = scatter(
+        plot_data.feature_counts,
+        plot_data.max_fitness;
+        ms = 7.5,
+        markercolor = :gray35,
+        markerstrokewidth = 0,
+        label = "Counts",
+        xlabel = "Number of selected features",
+        ylabel = fitness_label,
+        title = title,
+        legend = :bottomright,
+        xlims = (0, landscape.num_features + 0.5),
+        xticks = 0:landscape.num_features,
+        grid = true,
+        gridalpha = 0.22,
+        background_color = :white,
+        framestyle = :box,
+        size = size,
+        dpi = dpi,
+    )
+
+    plot!(
+        plt,
+        plot_data.feature_counts,
+        plot_data.max_fitness;
+        linewidth = 3,
+        color = :dodgerblue3,
+        label = "Triangle fitness",
+    )
+
+    if !isempty(plot_data.local_optima_counts)
+        scatter!(
+            plt,
+            plot_data.local_optima_counts,
+            [triangle_asym_fitness(count) for count in plot_data.local_optima_counts];
+            ms = 8.5,
+            markercolor = :purple3,
+            markeralpha = 0.9,
+            markerstrokewidth = 0,
+            label = "Local optima counts",
+        )
+    end
+
+    scatter!(
+        plt,
+        plot_data.global_optima_counts,
+        [triangle_asym_fitness(count) for count in plot_data.global_optima_counts];
+        ms = 11.0,
+        markercolor = :red2,
+        markeralpha = 1.0,
+        markerstrokewidth = 0,
+        label = "Global optimum count",
+    )
+
+    return plt
+end
+
 function save_fitness_by_feature_count_plot(landscape::Landscape,
                                             output_path::AbstractString;
                                             values = fitness_values(landscape),
@@ -395,6 +522,24 @@ function save_fitness_by_feature_count_plot(landscape::Landscape,
     plt = plot_fitness_by_feature_count(
         landscape;
         values=values,
+        title=title,
+        fitness_label=fitness_label,
+        size=size,
+        dpi=dpi,
+    )
+    mkpath(dirname(output_path))
+    savefig(plt, output_path)
+    return output_path
+end
+
+function save_fitness_by_feature_count_plot(landscape::TriangleByteLandscape,
+                                            output_path::AbstractString;
+                                            title::AbstractString = "$(landscape.name) Fitness by Feature Count",
+                                            fitness_label::AbstractString = "Fitness",
+                                            size::Tuple{Int, Int} = (1400, 900),
+                                            dpi::Int = 200)
+    plt = plot_fitness_by_feature_count(
+        landscape;
         title=title,
         fitness_label=fitness_label,
         size=size,
@@ -1052,16 +1197,14 @@ function compress_path_positions(x_values::AbstractVector,
     return positions
 end
 
-function plot_fitness_by_feature_count_with_ea(landscape::Landscape,
+function plot_fitness_by_feature_count_with_ea(landscape::AbstractLandscape,
                                                result;
-                                               values = fitness_values(landscape),
                                                title::AbstractString = "$(landscape.name) Fitness by Feature Count with EA Path",
                                                fitness_label::AbstractString = "Fitness",
                                                size::Tuple{Int, Int} = (1400, 900),
                                                dpi::Int = 200)
     plt = plot_fitness_by_feature_count(
         landscape;
-        values=values,
         title=title,
         fitness_label=fitness_label,
         size=size,
@@ -1132,10 +1275,9 @@ function plot_fitness_by_feature_count_with_ea(landscape::Landscape,
     return plt
 end
 
-function save_fitness_by_feature_count_with_ea_plot(landscape::Landscape,
+function save_fitness_by_feature_count_with_ea_plot(landscape::AbstractLandscape,
                                                     result,
                                                     output_path::AbstractString;
-                                                    values = fitness_values(landscape),
                                                     title::AbstractString = "$(landscape.name) Fitness by Feature Count with EA Path",
                                                     fitness_label::AbstractString = "Fitness",
                                                     size::Tuple{Int, Int} = (1400, 900),
@@ -1143,7 +1285,6 @@ function save_fitness_by_feature_count_with_ea_plot(landscape::Landscape,
     plt = plot_fitness_by_feature_count_with_ea(
         landscape,
         result;
-        values=values,
         title=title,
         fitness_label=fitness_label,
         size=size,

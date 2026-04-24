@@ -21,7 +21,7 @@ function index_to_bitvector(index::Integer, nbits::Integer)
     return bits
 end
 
-function best_single_feature_index(landscape::Landscape, epsilon::Real)
+function best_single_feature_index(landscape::AbstractLandscape, epsilon::Real)
     landscape.num_features > 0 ||
         throw(ArgumentError("Cannot compute a repair index for a zero-feature landscape"))
 
@@ -90,7 +90,7 @@ function best_penalized_candidate_state(states)
     return best
 end
 
-function run_single_objective_ea(landscape::Landscape;
+function run_single_objective_ea(landscape::AbstractLandscape;
                                  iterations::Integer,
                                  epsilon::Real = 0.0,
                                  initial_index::Union{Nothing, Integer} = nothing,

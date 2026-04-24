@@ -104,6 +104,47 @@ end
     @test isapprox(IT3708Project3.candidate_state(landscape, 15, 0.25).penalized_fitness, 4.0; atol=1e-12)
 end
 
+@testset "Asymmetric triangle landscape" begin
+    @test IT3708Project3.countActiveBits(0, 5) == 0
+    @test IT3708Project3.countActiveBits(31, 5) == 5
+    @test IT3708Project3.triangle_asym_fitness(0) == 0
+    @test IT3708Project3.triangle_asym_fitness(5) == 5
+    @test IT3708Project3.triangle_asym_fitness(10) == 0
+    @test IT3708Project3.triangle_asym_fitness(15) == 5
+    @test IT3708Project3.triangle_asym_fitness(20) == 0
+    @test IT3708Project3.triangle_asym_fitness(25) == 5
+    @test IT3708Project3.triangle_asym_fitness(30) == 0
+    @test IT3708Project3.triangle_asym_fitness(31) == 6
+    @test IT3708Project3.triangle_asym_global_optimum_index(5) == 31
+    @test IT3708Project3.triangle_asym_hamming_distance(0, 5) == 5
+    @test IT3708Project3.triangle_asym_hamming_distance(31, 5) == 0
+    @test IT3708Project3.triangle_asym_local_optimum_counts(31) == [5, 15, 25, 31]
+    @test IT3708Project3.triangle_asym_local_optimum_multiplicity(5, 31) == BigInt(169911)
+    @test IT3708Project3.triangle_asym_local_optimum_multiplicity(15, 31) == BigInt(300540195)
+    @test IT3708Project3.triangle_asym_local_optimum_multiplicity(25, 31) == BigInt(736281)
+    @test IT3708Project3.triangle_asym_local_optimum_multiplicity(31, 31) == BigInt(1)
+
+    small_path = tempname() * ".bin"
+    small_landscape = IT3708Project3.triangle_asym_landscape(; n=5, input_path=small_path, force_regenerate=true, threaded=false)
+
+    @test small_landscape isa TriangleByteLandscape
+    @test small_landscape.name == "triangle-asym"
+    @test small_landscape.num_features == 5
+    @test length(small_landscape.fitness_table) == 32
+    @test IT3708Project3.fitness(small_landscape, 0) == 0.0
+    @test IT3708Project3.fitness(small_landscape, 31) == 5.0
+    @test IT3708Project3.candidate_state(small_landscape, 0, 0.0).num_selected == 0
+    @test IT3708Project3.candidate_state(small_landscape, 31, 0.0).num_selected == 5
+
+    loaded_n, loaded_table = IT3708Project3.read_triangle_asym_table(small_path)
+    @test loaded_n == 5
+    @test loaded_table == small_landscape.fitness_table
+
+    sampled = IT3708Project3.triangle_asym_sample_local_optima_indices(; max_count=10)
+    @test length(sampled) == 10
+    @test issorted(sampled)
+end
+
 @testset "HBM" begin
     @test sort(one_flip_neighbors(1, 4)) == [3, 5, 9]
     @test sort(one_flip_neighbors(7, 4)) == [3, 5, 6, 15]
@@ -167,6 +208,27 @@ end
     @test exported_path == output_png
     @test isfile(output_png)
     @test filesize(output_png) > 0
+end
+
+@testset "Asymmetric triangle visualization methods" begin
+    small_path = tempname() * ".bin"
+    landscape = IT3708Project3.triangle_asym_landscape(; n=5, input_path=small_path, force_regenerate=true, threaded=false)
+    plot_data = feature_count_plot_data(landscape)
+
+    @test plot_data.feature_counts == collect(0:5)
+    @test plot_data.max_fitness == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    output_png = tempname() * ".png"
+    exported_path = save_fitness_by_feature_count_plot(landscape, output_png; title="Triangle Asym Feature Count Test")
+    @test exported_path == output_png
+    @test isfile(output_png)
+    @test filesize(output_png) > 0
+
+    hbm_png = tempname() * ".png"
+    hbm_path = save_hbm_plot(landscape, hbm_png; title="Triangle Asym HBM Test")
+    @test hbm_path == hbm_png
+    @test isfile(hbm_png)
+    @test filesize(hbm_png) > 0
 end
 
 @testset "Single-objective GA" begin
@@ -294,6 +356,42 @@ end
     @test history.initial_best_raw == 2.0
     @test history.final_best_ind == BitVector([true, true])
     @test history.final_best_raw == 2.0
+end
+
+@testset "Single-objective GA on asymmetric triangle" begin
+    small_path = tempname() * ".bin"
+    landscape = IT3708Project3.triangle_asym_landscape(; n=5, input_path=small_path, force_regenerate=true, threaded=false)
+
+    result = run_single_objective_ea(
+        landscape;
+        iterations=6,
+        epsilon=0.0,
+        population_size=8,
+        crossover_probability=0.85,
+        mutation_probability=0.15,
+        tournament_size=3,
+        survivor_mode=:elitist,
+        elite=2,
+        rng=MersenneTwister(5),
+        keep_history=true,
+    )
+
+    @test result.algorithm == :single_objective_ga
+    @test 0 <= result.best_index <= 31
+    @test result.best_penalized_fitness >= 0.0
+    @test length(result.current_history) == 7
+    @test length(result.current_num_selected_history) == 7
+
+    overlay_png = tempname() * ".png"
+    overlay_path = save_fitness_by_feature_count_with_ea_plot(
+        landscape,
+        result,
+        overlay_png;
+        title="Triangle Asym GA Feature Count Test",
+    )
+    @test overlay_path == overlay_png
+    @test isfile(overlay_png)
+    @test filesize(overlay_png) > 0
 end
 
 @testset "NSGA-II core" begin
