@@ -1,4 +1,6 @@
-struct Landscape
+abstract type AbstractLandscape end
+
+struct Landscape <: AbstractLandscape
     name::String
     num_features::Int
     indices::Vector{Int}
@@ -25,6 +27,30 @@ struct Landscape
             Int.(num_selected),
             Float64.(accuracy),
             Float64.(time),
+            allow_zero,
+        )
+    end
+end
+
+struct TriangleByteLandscape <: AbstractLandscape
+    name::String
+    num_features::Int
+    fitness_table::Vector{UInt8}
+    allow_zero::Bool
+
+    function TriangleByteLandscape(name::AbstractString,
+                                   num_features::Integer,
+                                   fitness_table::AbstractVector{UInt8},
+                                   allow_zero::Bool = true)
+        num_features >= 0 || throw(ArgumentError("num_features must be non-negative"))
+        expected_length = Int(1) << Int(num_features)
+        length(fitness_table) == expected_length ||
+            throw(ArgumentError("fitness_table length must be $(expected_length) for num_features=$(num_features)"))
+
+        return new(
+            String(name),
+            Int(num_features),
+            fitness_table isa Vector{UInt8} ? fitness_table : UInt8[byte for byte in fitness_table],
             allow_zero,
         )
     end

@@ -61,6 +61,15 @@ julia --project=. plot_feature_count.jl hepatitis 0.0
 julia --project=. plot_feature_count.jl triangle
 ```
 
+Generate and test the Step 6 asymmetric triangle landscape:
+
+```bash
+julia --project=. generate_triangle_asym.jl
+julia --project=. run_ea.jl triangle-asym 100 0.0 --seed 42 --plot both
+```
+
+The generator writes the byte lookup table to `exports/triangle/triangle-asym.bin`. The GA command then loads that table, runs the single-objective GA on `triangle-asym`, and writes the trace/feature-count plots under `exports/plots/ea/`.
+
 Use the Step 6 test datasets manually with `epsilon=0.0`; they are loadable through the same dataset-key flow but are intentionally not part of the default `run_experiments.jl` training suite.
 
 Run batch experiments for the report:
