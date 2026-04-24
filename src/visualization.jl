@@ -3,7 +3,7 @@ using Statistics
 
 function hbm_marker_sizes(x_cells::Int, y_cells::Int)
     base_size = clamp(min(520 / x_cells, 340 / y_cells), 1.5, 18.0)
-    optimum_size = clamp(base_size * 1.45, 3.0, 26.0)
+    optimum_size = clamp(base_size * 1.6, 4.5, 28.0)
     return (base = base_size, optimum = optimum_size)
 end
 
