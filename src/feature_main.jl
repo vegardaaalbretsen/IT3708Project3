@@ -292,7 +292,7 @@ function run_nsga2_feature_ea(landscape::Landscape;
     end
 
     pm = isnothing(mutation_probability) ?
-        (landscape.num_features == 0 ? 0.0 : inv(landscape.num_features)) :
+        (landscape.num_features == 0 ? 0.0 : 3 * inv(landscape.num_features)) :
         Float64(mutation_probability)
     0 <= pm <= 1 || throw(ArgumentError("mutation_probability must be between 0 and 1"))
 
