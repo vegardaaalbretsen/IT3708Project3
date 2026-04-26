@@ -135,13 +135,13 @@ function default_config(; seed_count::Int = 10,
         4,
         100,
         100,
-        0.95,
+        0.60,
         nothing,
         100,
         40,
-        0.7,
-        1.4,
-        1.4,
+        0.95,
+        2.0,
+        0.4,
     )
 end
 
@@ -293,7 +293,7 @@ function parameters_string(algorithm::Symbol, config::ExperimentConfig)
             "elite=$(config.ga_elite)",
         ), ';')
     elseif algorithm == :nsga2
-        pm = isnothing(config.nsga2_mutation_probability) ? "1/n" : string(config.nsga2_mutation_probability)
+        pm = isnothing(config.nsga2_mutation_probability) ? "3/n" : string(config.nsga2_mutation_probability)
         return join((
             "iterations=$(config.nsga2_iterations)",
             "population_size=$(config.nsga2_population_size)",
